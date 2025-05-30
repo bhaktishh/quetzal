@@ -75,7 +75,7 @@ data Stmt = Assignment String Stmt
         deriving (Show, Eq)
 
 data Case = Case {
-    caseOn :: Tm,
+    caseOn :: Tm, 
     caseBody :: List Stmt
 }
     deriving (Show, Eq)
@@ -133,7 +133,7 @@ pTm = pVarTm <|> pTyVarTm
 pTyCustom :: Parser Ty 
 pTyCustom = do
     tyName <- pSpaces $ pUpperString 
-    (_, tyParams, _) <- pSpaces $ (, ,) <$> try (char '<') <*> pTm `sepBy` char ',' <*> try (char '>')
+    (_, tyParams, _) <- pSpaces $ (, ,) <$> try (char '<') <*> (pSpaces pTm) `sepBy` char ',' <*> try (char '>')
     pure $ TyCustom {
         tyName, tyParams
     }

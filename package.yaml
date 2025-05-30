@@ -33,6 +33,7 @@ ghc-options:
 - -Wincomplete-uni-patterns
 - -Wmissing-export-lists
 - -Wmissing-home-modules
+- -Wunused-top-binds
 - -Wpartial-fields
 - -Wredundant-constraints
 
