@@ -4,9 +4,10 @@ module Main (main) where
 
 import Lib
 import Data.Void (Void)
-import Text.Megaparsec ( (<|>), many, Parsec, MonadParsec(try, eof), parse, sepBy )
+import Text.Megaparsec ( (<|>), many, some, Parsec, MonadParsec(try, eof), parse, sepBy )
 import Data.Functor (($>))
-import Text.Megaparsec.Char (char, string, lowerChar, upperChar, alphaNumChar, space)
+import Data.Char (digitToInt)
+import Text.Megaparsec.Char (char, string, lowerChar, upperChar, alphaNumChar, space, digitChar)
 
 type List a = [a]
 
@@ -18,7 +19,7 @@ main :: IO ()
 main = someFunc
 
 data Ty = TyNat 
-        | TyFunc Ty Ty 
+        | TyVar String
         | TyCustom {
             tyName :: String, 
             tyParams :: List Tm
@@ -26,6 +27,7 @@ data Ty = TyNat
         deriving (Show, Eq)
 
 data Tm = TmNat Int
+        | TmPlus Tm Tm 
         | TmVar String
         | TmTy Ty 
         | TmApp Tm Tm 
@@ -61,7 +63,7 @@ data TyParam = TmParam String Ty
 
 data Constructor = Constructor {
     conName :: String, 
-    conArgs :: List (String, Ty), 
+    conArgs :: List (Ty, String), 
     conTy :: Ty
 }
     deriving (Show, Eq)
@@ -93,14 +95,15 @@ pProg = undefined
 pSpaces :: Parser a -> Parser a 
 pSpaces p = space *> p <* space
 
+pParens :: Parser a -> Parser a
+pParens p = do 
+    _ <- pSpaces $ char '('
+    x <- p
+    _ <- pSpaces $ char ')' 
+    pure x 
+
 pSemicolon :: Parser Char
 pSemicolon = char ';'
-
-pTyDecl :: Parser TyDecl
-pTyDecl = undefined
-
-pTyDeclName :: Parser String 
-pTyDeclName = undefined 
 
 pTyParam :: Parser TyParam
 pTyParam = undefined 
@@ -111,11 +114,15 @@ pLowerString = (:) <$> lowerChar <*> many alphaNumChar
 pUpperString :: Parser String 
 pUpperString = (:) <$> upperChar <*> many alphaNumChar
 
-pConArgs :: Parser [(String, Ty)]
-pConArgs = undefined 
+pConArgs :: Parser [(Ty, String)]
+pConArgs = do 
+    _ <- pSpaces $ char '('
+    ls <- (pSpaces ((,) <$> pSpaces pTy <*> pSpaces pVar)) `sepBy` char ',' 
+    _ <- pSpaces $ char ')'
+    pure ls 
 
 pTyVar :: Parser String 
-pTyVar = many upperChar
+pTyVar = some upperChar
 
 pVar :: Parser String 
 pVar = pLowerString
@@ -126,9 +133,21 @@ pVarTm = TmVar <$> pVar
 pTyVarTm :: Parser Tm
 pTyVarTm = TmTyVar <$> pTyVar
 
+pTyVarTy :: Parser Ty 
+pTyVarTy = TyVar <$> pTyVar 
+
+pPlusTm :: Parser Tm 
+pPlusTm = do 
+    x <- pSpaces pTm1
+    _ <- char '+'
+    y <- pSpaces pTm
+    pure $ TmPlus x y
 
 pTm :: Parser Tm 
-pTm = pVarTm <|> pTyVarTm
+pTm = try pPlusTm <|> pTm1
+
+pTm1 :: Parser Tm 
+pTm1 = try (pParens pTm) <|> pVarTm <|> pTyVarTm <|> pNat
 
 pTyCustom :: Parser Ty 
 pTyCustom = do
@@ -138,8 +157,16 @@ pTyCustom = do
         tyName, tyParams
     }
 
+pNat :: Parser Tm 
+pNat = do
+    nums <- many digitChar
+    pure $ TmNat ((read :: String -> Int) nums)
+
+pTyNat :: Parser Ty 
+pTyNat = string "Nat" >> pure TyNat 
+
 pTy :: Parser Ty 
-pTy = undefined
+pTy = try pTyCustom <|> pTyNat <|> pTyVarTy
 
 pTyDeclConstructor :: Parser Constructor
 pTyDeclConstructor = do
@@ -151,4 +178,16 @@ pTyDeclConstructor = do
     _ <- pSemicolon
     pure $ Constructor {
         conName, conArgs, conTy
+    }
+
+pTyDecl :: Parser TyDecl
+pTyDecl = do 
+    _ <- pSpaces $ string "type"
+    tyDeclName <- pSpaces pUpperString
+    tyDeclParams <- pSpaces pTyDeclParams 
+    _ <- pSpaces $ char '{'
+    tyDeclConstructors <- pSpaces $ many pTyDeclConstructor
+    _ <- pSpaces $ char '}'
+    pure $ TyDecl {
+        tyDeclName, tyDeclParams, tyDeclConstructors
     }
