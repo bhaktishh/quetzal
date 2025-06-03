@@ -1,5 +1,6 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
+
 module Main (main) where
 
 import Lib
@@ -14,11 +15,23 @@ type List a = [a]
 -- variables must begin with a lowercase letter
 -- type metavariables must be all uppercase
 -- type names and type constructor names must begin with an uppercase letter 
+-- non parameterized types must include "<>"
+
+{-
+
+type Vect<Nat n, Ty T> {
+    constructor Nil () of Vect<0,T>;
+    constructor Cons (T head, Vect<n, T> tail) of Vect<n+1, T>;    
+}
+
+-}
+
 
 main :: IO ()
 main = someFunc
 
 data Ty = TyNat 
+        | TyTy 
         | TyVar String
         | TyCustom {
             tyName :: String, 
@@ -42,23 +55,19 @@ data Prog = Prog {
     deriving (Show, Eq)
 
 data Func = Func {
-    funName :: String, 
-    funRetType :: Ty, 
-    funArgs :: List (String, Ty), -- should be dependent
-    funBody :: List Stmt,
-    funReturns :: Stmt
+    funcName :: String, 
+    funcRetType :: Ty, 
+    funcArgs :: List (String, Ty), -- should be dependent
+    funcBody :: List Stmt,
+    funcReturns :: Stmt
 }
     deriving (Show, Eq)
 
 data TyDecl = TyDecl {
     tyDeclName :: String, 
-    tyDeclParams :: List TyParam, 
+    tyDeclParams :: List (Ty, String), 
     tyDeclConstructors :: List Constructor
 }
-    deriving (Show, Eq)
-
-data TyParam = TmParam String Ty 
-            | TyParam String
     deriving (Show, Eq)
 
 data Constructor = Constructor {
@@ -105,21 +114,11 @@ pParens p = do
 pSemicolon :: Parser Char
 pSemicolon = char ';'
 
-pTyParam :: Parser TyParam
-pTyParam = undefined 
-
 pLowerString :: Parser String
 pLowerString = (:) <$> lowerChar <*> many alphaNumChar
 
 pUpperString :: Parser String 
 pUpperString = (:) <$> upperChar <*> many alphaNumChar
-
-pConArgs :: Parser [(Ty, String)]
-pConArgs = do 
-    _ <- pSpaces $ char '('
-    ls <- (pSpaces ((,) <$> pSpaces pTy <*> pSpaces pVar)) `sepBy` char ',' 
-    _ <- pSpaces $ char ')'
-    pure ls 
 
 pTyVar :: Parser String 
 pTyVar = some upperChar
@@ -159,15 +158,19 @@ pTyCustom = do
 
 pNat :: Parser Tm 
 pNat = do
-    nums <- many digitChar
+    nums <- some digitChar
     pure $ TmNat ((read :: String -> Int) nums)
 
 pTyNat :: Parser Ty 
 pTyNat = string "Nat" >> pure TyNat 
 
-pTy :: Parser Ty 
-pTy = try pTyCustom <|> pTyNat <|> pTyVarTy
+pTyTy :: Parser Ty 
+pTyTy = string "Ty" >> pure TyTy
 
+pTy :: Parser Ty 
+pTy = try pTyCustom <|> pTyNat <|> pTyTy <|> pTyVarTy 
+
+-- type declarations 
 pTyDeclConstructor :: Parser Constructor
 pTyDeclConstructor = do
     _ <- pSpaces $ string "constructor"
@@ -175,19 +178,39 @@ pTyDeclConstructor = do
     conArgs <- pSpaces $ pConArgs
     _ <- pSpaces $ string "of"
     conTy <- pSpaces $ pTy
-    _ <- pSemicolon
+    _ <- pSpaces pSemicolon
     pure $ Constructor {
         conName, conArgs, conTy
     }
+
+pConArgs :: Parser [(Ty, String)]
+pConArgs = do 
+    _ <- pSpaces $ char '('
+    ls <- (pSpaces ((,) <$> pSpaces pTy <*> pSpaces pVar)) `sepBy` char ',' 
+    _ <- pSpaces $ char ')'
+    pure ls 
 
 pTyDecl :: Parser TyDecl
 pTyDecl = do 
     _ <- pSpaces $ string "type"
     tyDeclName <- pSpaces pUpperString
-    tyDeclParams <- pSpaces pTyDeclParams 
+    _ <- pSpaces $ char '<'
+    tyDeclParams <- (pSpaces ((,) <$> pSpaces pTy <*> pSpaces (pVar <|> pTyVar))) `sepBy` char ',' 
+    _ <- pSpaces $ char '>'
     _ <- pSpaces $ char '{'
     tyDeclConstructors <- pSpaces $ many pTyDeclConstructor
     _ <- pSpaces $ char '}'
     pure $ TyDecl {
         tyDeclName, tyDeclParams, tyDeclConstructors
     }
+
+-- function definitions 
+
+-- pFunc :: Parser Func 
+-- pFunc = do 
+--     _ <- pSpace $ string "func"
+--     funcName <- pSpaces pLowerString
+--     _ <- pSpaces $ char '<'
+--     funcArgs <- pSpaces pFuncArgs
+--     _ <- pSpaces $ char '>'
+    
