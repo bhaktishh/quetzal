@@ -24,7 +24,9 @@ type List a = [a]
 -- type names and type constructor names must begin with an uppercase letter 
 -- non parameterized types must include "<>"
 
--- is a function call a term or a statement? 
+-- TODO: remove unnecessary {}, (), <>, of Void ... eg Nil() 
+-- TODO: deal with semicolons right 
+
 {-
 
 type Vect<Nat n, Ty T> {
