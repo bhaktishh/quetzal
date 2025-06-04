@@ -43,6 +43,8 @@ library
 executable parse-to-idris-exe
   main-is: Main.hs
   other-modules:
+      FirstTypes
+      SSA
       Paths_parse_to_idris
   autogen-modules:
       Paths_parse_to_idris

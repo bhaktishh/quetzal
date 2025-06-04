@@ -4,13 +4,13 @@
 module Main (main) where
 
 import Lib
+import FirstTypes
 import Data.Void (Void)
-import Text.Megaparsec ( (<|>), runParser, parseTest, many, some, Parsec, MonadParsec(try, eof), parse, sepBy )
+import Text.Megaparsec ( (<|>), runParser, many, some, Parsec, MonadParsec(try, eof), parse, sepBy )
 import Data.Functor (($>))
 import Data.Char (digitToInt)
 import Text.Megaparsec.Char (char, string, lowerChar, upperChar, alphaNumChar, space, digitChar)
 
-type List a = [a]
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
 -- is there a way i can add a list of variables and types to carry around? or should that be a second pass
@@ -69,72 +69,6 @@ func replicate<Ty T> (T a, Nat n) of Vect<n,T> {
 main :: IO ()
 main = someFunc
 
-data Ty = TyNat 
-        | TyTy 
-        | TyVoid
-        | TyVar String
-        | TyCustom {
-            tyName :: String, 
-            tyParams :: List Tm
-        } 
-        deriving (Show, Eq)
-
-data Tm = TmNat Int
-        | TmPlus Tm Tm 
-        | TmVar String
-        | TmTy Ty 
-        | TmApp Tm Tm 
-        | TmTyVar String 
-        | TmFunctionCall String (List Tm)
-        | TmCon String (List Tm)
-        deriving (Show, Eq)
-
-data Prog = Prog {
-    types :: List TyDecl, 
-    funcs :: List Func
-} 
-    deriving (Show, Eq)
-
-data Func = Func {
-    funcName :: String, 
-    funcRetType :: Ty, 
-    funcErasedArgs :: List (Ty, String),
-    funcArgs :: List (Ty, String),
-    funcBody :: List Stmt
-}
-    deriving (Show, Eq)
-
-data TyDecl = TyDecl {
-    tyDeclName :: String, 
-    tyDeclParams :: List (Ty, String), 
-    tyDeclConstructors :: List Constructor
-}
-    deriving (Show, Eq)
-
-data Constructor = Constructor {
-    conName :: String, 
-    conArgs :: List (Ty, String), 
-    conTy :: Ty
-}
-    deriving (Show, Eq)
-
-data Stmt = Assign String Tm
-        | Decl Ty String 
-        | DeclAssign Ty String Tm 
-        | Return Tm
-        | Blank
-        | Switch {
-            switchOn :: List Tm,
-            cases :: List Case
-        }
-        deriving (Show, Eq)
-
-data Case = Case {
-    caseOn :: List Tm, 
-    caseBody :: List Stmt
-}
-    deriving (Show, Eq)
-
 type Parser = Parsec Void String
 
 tmParse :: String -> Prog
@@ -146,6 +80,7 @@ pProg :: Parser Prog
 pProg = do 
     types <- many $ pSpaces pTyDecl 
     funcs <- many $ pSpaces pFunc
+    _ <- eof
     pure $ Prog {
         types, funcs
     }
@@ -184,6 +119,14 @@ pTyVarTm = TmTyVar <$> pTyVar
 pTyVarTy :: Parser Ty 
 pTyVarTy = TyVar <$> pTyVar 
 
+pTyFunctionCall :: Parser Ty
+pTyFunctionCall = do 
+    name <- pSpaces $ pTyVar <|> pVar 
+    _ <- pSpaces $ char '('
+    args <- pSpaces $ pTm `sepBy` char ','
+    _ <- pSpaces $ char ')'
+    pure $ TyFunctionCall name args 
+
 pPlusTm :: Parser Tm 
 pPlusTm = do 
     x <- pSpaces pTm1
@@ -199,10 +142,15 @@ pTm1 = try (pParens pTm) <|> try pVarTm <|> pTyVarTm <|> pNat
 
 pTyCustom :: Parser Ty 
 pTyCustom = do
-    tyName <- pSpaces $ pUpperString 
-    (_, tyParams, _) <- pSpaces $ (, ,) <$> try (char '<') <*> (pSpaces pTm) `sepBy` char ',' <*> try (char '>')
+    tyName <- pSpaces pUpperString 
+    _ <- pSpaces $ char '<'
+    tyErasedParams <- pSpaces pTm `sepBy` char ','
+    _ <- pSpaces $ char '>'
+    _ <- pSpaces $ char '('
+    tyParams <- pSpaces pTm `sepBy` char ','
+    _ <- pSpaces $ char ')'
     pure $ TyCustom {
-        tyName, tyParams
+        tyName, tyErasedParams, tyParams
     }
 
 pNat :: Parser Tm 
@@ -219,17 +167,29 @@ pTyTy = string "Ty" >> pure TyTy
 pTyVoid :: Parser Ty
 pTyVoid = string "Void" >> pure TyVoid 
 
+pTyFunc :: Parser Ty
+pTyFunc = do 
+    _ <- pSpaces $ string "Func"
+    _ <- pSpaces $ char '('
+    tyFuncArgs <- pFuncArgs 
+    _ <- pSpaces $ string "=>"
+    tyFuncRetTy <- pSpaces pTy
+    _ <- pSpaces $ char ')'
+    pure $ TyFunc {
+        tyFuncArgs, tyFuncRetTy
+    }
+
 pTy :: Parser Ty 
-pTy = try pTyCustom <|> pTyNat <|> pTyTy <|> pTyVoid <|> pTyVarTy 
+pTy = try pTyCustom <|> try pTyFunc <|> try pTyFunctionCall <|> pTyNat <|> pTyTy <|> pTyVoid <|> pTyVarTy 
 
 -- type declarations 
 pTyDeclConstructor :: Parser Constructor
 pTyDeclConstructor = do
     _ <- pSpaces $ string "constructor"
-    conName <- pSpaces $ pUpperString 
-    conArgs <- pSpaces $ pConArgs
+    conName <- pSpaces pUpperString 
+    conArgs <- pSpaces pConArgs
     _ <- pSpaces $ string "of"
-    conTy <- pSpaces $ pTy
+    conTy <- pSpaces pTy
     _ <- pSpaces pSemicolon
     pure $ Constructor {
         conName, conArgs, conTy
@@ -247,13 +207,16 @@ pTyDecl = do
     _ <- pSpaces $ string "type"
     tyDeclName <- pSpaces pUpperString
     _ <- pSpaces $ char '<'
-    tyDeclParams <- pSpaces pFuncArgs 
+    tyDeclErasedParams <- pSpaces pFuncArgs
     _ <- pSpaces $ char '>'
+    _ <- pSpaces $ char '('
+    tyDeclParams <- pSpaces pFuncArgs
+    _ <- pSpaces $ char ')'
     _ <- pSpaces $ char '{'
     tyDeclConstructors <- pSpaces $ many pTyDeclConstructor
     _ <- pSpaces $ char '}'
     pure $ TyDecl {
-        tyDeclName, tyDeclParams, tyDeclConstructors
+        tyDeclName, tyDeclErasedParams, tyDeclParams, tyDeclConstructors
     }
 
 -- function definitions 
@@ -271,16 +234,17 @@ pFunc = do
     _ <- pSpaces $ string "of"
     funcRetType <- pSpaces pTy 
     _ <- pSpaces $ char '{'
-    funcBody <- many pStmt
+    funcBody <- pSpaces $ many pStmt
+    _ <- pSpaces $ char '}'
     pure $ Func {
         funcName, funcRetType, funcErasedArgs, funcArgs, funcBody
     }
 
 pFuncArgs :: Parser (List (Ty, String))
-pFuncArgs = (pSpaces 
+pFuncArgs = pSpaces 
             ((,) <$> 
                 pSpaces pTy <*> 
-                pSpaces (pVar <|> pTyVar))) 
+                pSpaces (pVar <|> pTyVar))
             `sepBy` char ',' 
 
 
@@ -303,7 +267,7 @@ pSwitch :: Parser Stmt
 pSwitch = do 
     _ <- pSpaces $ string "switch"
     _ <- pSpaces $ char '('
-    switchOn <- (pSpaces pTm) `sepBy` char ','
+    switchOn <- pSpaces pTm `sepBy` char ','
     _ <- pSpaces $ char ')'
     _ <- pSpaces $ char '{'
     cases <- some $ pSpaces pCase
@@ -316,7 +280,7 @@ pCase :: Parser Case
 pCase = do 
     _ <- pSpaces $ string "case"
     _ <- pSpaces $ char '('
-    caseOn <- (pSpaces pTm) `sepBy` char ','
+    caseOn <- pSpaces pTm `sepBy` char ','
     _ <- pSpaces $ char ')'
     _ <- pSpaces $ char '{'
     caseBody <- many $ pSpaces pStmt
@@ -357,7 +321,7 @@ pFunctionCall :: Parser Tm
 pFunctionCall = do
     name <- pSpaces pLowerString 
     _ <- pSpaces $ char '('
-    args <- (pSpaces pTm) `sepBy` char ','
+    args <- pSpaces pTm `sepBy` char ','
     _ <- pSpaces $ char ')'
     pure $ TmFunctionCall name args
 
@@ -365,8 +329,9 @@ pConTm :: Parser Tm
 pConTm = do
     name <- pSpaces pUpperString 
     _ <- pSpaces $ char '('
-    args <- (pSpaces pTm) `sepBy` char ','
+    args <- pSpaces pTm `sepBy` char ','
     _ <- pSpaces $ char ')'
     pure $ TmCon name args
 -- parsing utils 
 parseFromFile p file = runParser p file <$> readFile file
+

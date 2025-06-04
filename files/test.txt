@@ -1,16 +1,3 @@
-type Vect<Nat n, Ty T> {
-    constructor Nil () of Vect<0,T>;
-    constructor Cons (T head, Vect<n, T> tail) of Vect<n+1, T>;
-}
-
-func append<Nat n, Nat m, Ty T> (Vect<n,T> v1, Vect<m,T> v2) of Vect<n+m, T> {
-    switch (v1, v2) {
-        case (Nil(), v2) {
-            return v2;
-        }
-        case (Cons(x, xs), v2) {
-            v2 = append(xs, v2);
-            return Cons(x, v2);
-        }   
-    };
+type Pair<Ty T>(Func(T a => Ty) P) {
+    constructor MkPair (T a, P snd) of Pair<T>(p);
 }
