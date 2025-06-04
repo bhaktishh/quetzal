@@ -1,0 +1,34 @@
+type Vect<Nat n, Ty T> {
+    constructor Nil () of Vect<0,T>;
+    constructor Cons (T head, Vect<n, T> tail) of Vect<n+1, T>;
+}
+
+func append<Nat n, Nat m, Ty T> (Vect<n,T> v1, Vect<m,T> v2) of Vect<n+m, T> {
+    switch (v1, v2) {
+        case (Nil, v2) {
+            return v2;
+        }
+        case (Cons x xs, v2) {
+            v2 = append xs v2;
+            return Cons x v2;
+        }
+    }
+}
+
+func test<>() {} of Void
+
+
+func replicate<Ty T> (T a, Nat n) of Vect<n,T> {
+    switch(n) {
+        case (0) {;}
+        case (1) {;}
+    }
+}
+
+func replicate<Ty T> (T a, Nat n) of Vect<n,T> {
+    switch(n) {
+        case (0) {return Nil;}
+        case (S n) {return Cons x (repl x n);}
+
+    }
+}

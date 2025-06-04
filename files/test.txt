@@ -1,0 +1,11 @@
+type Vect<Nat n, Ty T> {
+    constructor Nil () of Vect<0,T>;
+    constructor Cons (T head, Vect<n, T> tail) of Vect<n+1, T>;
+}
+
+func replicate<Ty T> (T a, Nat n) of Vect<n,T> {
+    switch(n) {
+        case (0) {;}
+        case (1) {;}
+    }
+}

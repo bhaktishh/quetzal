@@ -5,7 +5,7 @@ module Main (main) where
 
 import Lib
 import Data.Void (Void)
-import Text.Megaparsec ( (<|>), many, some, Parsec, MonadParsec(try, eof), parse, sepBy )
+import Text.Megaparsec ( (<|>), runParser, many, some, Parsec, MonadParsec(try, eof), parse, sepBy )
 import Data.Functor (($>))
 import Data.Char (digitToInt)
 import Text.Megaparsec.Char (char, string, lowerChar, upperChar, alphaNumChar, space, digitChar)
@@ -13,11 +13,18 @@ import Text.Megaparsec.Char (char, string, lowerChar, upperChar, alphaNumChar, s
 type List a = [a]
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
+-- is there a way i can add a list of variables and types to carry around? or should that be a second pass
+-- how many passes is too many passes 
+-- also shouldn't idris handle all that 
+-- maybe idris shouldn't maybe this should have a dependent typechecker of its own 
+-- maybe the goal is efficiency and i can do the custom data representation stuff 
 
 -- variables must begin with a lowercase letter
 -- type metavariables must be all uppercase
 -- type names and type constructor names must begin with an uppercase letter 
 -- non parameterized types must include "<>"
+
+-- how do i add parsing for terms that have user defined types ... must i parse the types first and then the terms
 
 {-
 
@@ -81,8 +88,7 @@ data Tm = TmNat Int
 
 data Prog = Prog {
     types :: List TyDecl, 
-    funcs :: List Func, 
-    funcMain :: Func
+    funcs :: List Func
 } 
     deriving (Show, Eq)
 
@@ -109,7 +115,9 @@ data Constructor = Constructor {
 }
     deriving (Show, Eq)
 
-data Stmt = Assignment String Stmt
+data Stmt = Assign String Stmt
+        | Decl Ty String 
+        | DeclAssign Ty String Stmt 
         | Return Tm
         | Blank
         | Switch {
@@ -132,7 +140,12 @@ tmParse str = case parse pProg "" str of
         Right tm -> tm  
 
 pProg :: Parser Prog
-pProg = undefined
+pProg = do 
+    types <- many $ pSpaces pTyDecl 
+    funcs <- many $ pSpaces pFunc
+    pure $ Prog {
+        types, funcs
+    }
 
 pSpaces :: Parser a -> Parser a 
 pSpaces p = space *> p <* space
@@ -271,7 +284,10 @@ pFuncArgs = (pSpaces
 -- statements 
 
 pStmt :: Parser Stmt
-pStmt = try pSwitch <|> pSpaces pBlank
+pStmt = pSpaces $ 
+        pSwitch <|> 
+        try pDecl <|> pDeclAssign <|> try pAssign <|>
+        pReturn <|> pBlank
 
 pBlank :: Parser Stmt 
 pBlank = char ';' >> pure Blank
@@ -301,3 +317,39 @@ pCase = do
     pure $ Case {
         caseOn, caseBody
     }
+
+pReturn :: Parser Stmt 
+pReturn = do 
+    _ <- pSpaces $ string "return"
+    tm <- pSpaces pTm 
+    _ <- pSemicolon
+    pure $ Return tm 
+
+pAssign :: Parser Stmt 
+pAssign = do 
+    var <- pSpaces pLowerString
+    _ <- pSpaces $ char '='
+    rhs <- pSpaces pStmt 
+    _ <- pSpaces pSemicolon
+    pure $ Assign var rhs 
+
+
+pDecl :: Parser Stmt 
+pDecl = do 
+    ty <- pSpaces pTy 
+    var <- pSpaces pLowerString
+    _ <- pSpaces pSemicolon
+    pure $ Decl ty var
+
+pDeclAssign :: Parser Stmt 
+pDeclAssign = do 
+    ty <- pSpaces pTy 
+    var <- pSpaces pLowerString 
+    _ <- pSpaces $ char '='
+    rhs <- pSpaces pStmt
+    _ <- pSpaces pSemicolon
+    pure $ DeclAssign  ty var rhs 
+
+-- parsing utils 
+parseFromFile p file = runParser p file <$> readFile file
+
