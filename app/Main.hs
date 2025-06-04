@@ -5,7 +5,7 @@ module Main (main) where
 
 import Lib
 import Data.Void (Void)
-import Text.Megaparsec ( (<|>), runParser, many, some, Parsec, MonadParsec(try, eof), parse, sepBy )
+import Text.Megaparsec ( (<|>), runParser, parseTest, many, some, Parsec, MonadParsec(try, eof), parse, sepBy )
 import Data.Functor (($>))
 import Data.Char (digitToInt)
 import Text.Megaparsec.Char (char, string, lowerChar, upperChar, alphaNumChar, space, digitChar)
@@ -24,8 +24,7 @@ type List a = [a]
 -- type names and type constructor names must begin with an uppercase letter 
 -- non parameterized types must include "<>"
 
--- how do i add parsing for terms that have user defined types ... must i parse the types first and then the terms
-
+-- is a function call a term or a statement? 
 {-
 
 type Vect<Nat n, Ty T> {
@@ -84,6 +83,8 @@ data Tm = TmNat Int
         | TmTy Ty 
         | TmApp Tm Tm 
         | TmTyVar String 
+        | TmFunctionCall String (List Tm)
+        | TmCon String (List Tm)
         deriving (Show, Eq)
 
 data Prog = Prog {
@@ -115,9 +116,9 @@ data Constructor = Constructor {
 }
     deriving (Show, Eq)
 
-data Stmt = Assign String Stmt
+data Stmt = Assign String Tm
         | Decl Ty String 
-        | DeclAssign Ty String Stmt 
+        | DeclAssign Ty String Tm 
         | Return Tm
         | Blank
         | Switch {
@@ -189,10 +190,10 @@ pPlusTm = do
     pure $ TmPlus x y
 
 pTm :: Parser Tm 
-pTm = try pPlusTm <|> pTm1
+pTm = try pPlusTm <|> try pFunctionCall <|> try pConTm <|> pTm1
 
 pTm1 :: Parser Tm 
-pTm1 = try (pParens pTm) <|> pVarTm <|> pTyVarTm <|> pNat
+pTm1 = try (pParens pTm) <|> try pVarTm <|> pTyVarTm <|> pNat
 
 pTyCustom :: Parser Ty 
 pTyCustom = do
@@ -285,9 +286,13 @@ pFuncArgs = (pSpaces
 
 pStmt :: Parser Stmt
 pStmt = pSpaces $ 
-        pSwitch <|> 
-        try pDecl <|> pDeclAssign <|> try pAssign <|>
-        pReturn <|> pBlank
+        try pDecl <|>
+        try pAssign <|> 
+        ((try pSwitch <|> 
+        try pDeclAssign <|>
+        -- pFunctionCall <|> TODO 
+         pReturn) <* pSemicolon)
+         <|> pBlank
 
 pBlank :: Parser Stmt 
 pBlank = char ';' >> pure Blank
@@ -321,16 +326,14 @@ pCase = do
 pReturn :: Parser Stmt 
 pReturn = do 
     _ <- pSpaces $ string "return"
-    tm <- pSpaces pTm 
-    _ <- pSemicolon
+    tm <- pSpaces pTm
     pure $ Return tm 
 
 pAssign :: Parser Stmt 
 pAssign = do 
     var <- pSpaces pLowerString
     _ <- pSpaces $ char '='
-    rhs <- pSpaces pStmt 
-    _ <- pSpaces pSemicolon
+    rhs <- pSpaces pTm 
     pure $ Assign var rhs 
 
 
@@ -338,7 +341,6 @@ pDecl :: Parser Stmt
 pDecl = do 
     ty <- pSpaces pTy 
     var <- pSpaces pLowerString
-    _ <- pSpaces pSemicolon
     pure $ Decl ty var
 
 pDeclAssign :: Parser Stmt 
@@ -346,10 +348,23 @@ pDeclAssign = do
     ty <- pSpaces pTy 
     var <- pSpaces pLowerString 
     _ <- pSpaces $ char '='
-    rhs <- pSpaces pStmt
-    _ <- pSpaces pSemicolon
+    rhs <- pSpaces pTm
     pure $ DeclAssign  ty var rhs 
 
+pFunctionCall :: Parser Tm 
+pFunctionCall = do
+    name <- pSpaces pLowerString 
+    _ <- pSpaces $ char '('
+    args <- (pSpaces pTm) `sepBy` char ','
+    _ <- pSpaces $ char ')'
+    pure $ TmFunctionCall name args
+
+pConTm :: Parser Tm 
+pConTm = do
+    name <- pSpaces pUpperString 
+    _ <- pSpaces $ char '('
+    args <- (pSpaces pTm) `sepBy` char ','
+    _ <- pSpaces $ char ')'
+    pure $ TmCon name args
 -- parsing utils 
 parseFromFile p file = runParser p file <$> readFile file
-
