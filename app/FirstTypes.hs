@@ -26,7 +26,7 @@ module FirstTypes where
             deriving (Show, Eq)
 
     data Prog = Prog {
-        types :: List TyDecl, 
+        types :: List Decl, 
         funcs :: List Func
     }
         deriving (Show, Eq)
@@ -45,6 +45,14 @@ module FirstTypes where
         tyDeclErasedParams :: List (Ty, String),
         tyDeclParams :: List (Ty, String), 
         tyDeclConstructors :: List Constructor
+    }
+        deriving (Show, Eq)
+
+    data RecDecl = RecDecl {
+        recDeclName :: String, 
+        recDeclErasedParams :: List (Ty, String),
+        recDeclParams :: List (Ty, String), 
+        recDeclFields :: List (Ty, String)
     }
         deriving (Show, Eq)
 
@@ -71,3 +79,6 @@ module FirstTypes where
         caseBody :: List Stmt
     }
         deriving (Show, Eq) 
+
+    data Decl = Ty TyDecl | Rec RecDecl 
+        deriving (Show, Eq)

@@ -76,9 +76,12 @@ tmParse str = case parse pProg "" str of
         Left _ -> undefined 
         Right tm -> tm  
 
+pTLDecl :: Parser Decl 
+pTLDecl = (Ty <$> pTyDecl) <|> (Rec <$> pRecDecl)
+
 pProg :: Parser Prog
 pProg = do 
-    types <- many $ pSpaces pTyDecl 
+    types <- many $ pSpaces pTLDecl 
     funcs <- many $ pSpaces pFunc
     _ <- eof
     pure $ Prog {
@@ -201,6 +204,30 @@ pConArgs = do
     ls <- pFuncArgs
     _ <- pSpaces $ char ')'
     pure ls 
+
+pRecDecl :: Parser RecDecl 
+pRecDecl = do 
+    _ <- pSpaces $ string "record"
+    recDeclName <- pSpaces pUpperString
+    _ <- pSpaces $ char '<'
+    recDeclErasedParams <- pSpaces pFuncArgs
+    _ <- pSpaces $ char '>'
+    _ <- pSpaces $ char '('
+    recDeclParams <- pSpaces pFuncArgs
+    _ <- pSpaces $ char ')'
+    _ <- pSpaces $ char '{'
+    recDeclFields <- pSpaces $ many pRecDeclField
+    _ <- pSpaces $ char '}'
+    pure $ RecDecl {
+        recDeclName, recDeclErasedParams, recDeclParams, recDeclFields
+    }
+
+pRecDeclField :: Parser (Ty, String)
+pRecDeclField = do
+    ty <- pSpaces pTy 
+    var <- pSpaces pVar
+    _ <- pSpaces pSemicolon
+    pure (ty, var)
 
 pTyDecl :: Parser TyDecl
 pTyDecl = do 

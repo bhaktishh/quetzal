@@ -1,3 +1,0 @@
-type Pair<Ty T>(Func(T a => Ty) P) {
-    constructor MkPair (T a, P snd) of Pair<T>(p);
-}
