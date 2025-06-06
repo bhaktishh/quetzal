@@ -1,16 +1,15 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
 
-module Main (main) where
+module Main where
 
 import Lib
 import FirstTypes
 import Data.Void (Void)
 import Text.Megaparsec ( (<|>), runParser, many, some, Parsec, MonadParsec(try, eof), parse, sepBy )
-import Data.Functor (($>))
-import Data.Char (digitToInt)
 import Text.Megaparsec.Char (char, string, lowerChar, upperChar, alphaNumChar, space, digitChar)
-
+import qualified Data.Map as M
+import Data.Tuple (swap)
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
 -- is there a way i can add a list of variables and types to carry around? or should that be a second pass
@@ -279,12 +278,12 @@ pFuncArgs = pSpaces
 
 pStmt :: Parser Stmt
 pStmt = pSpaces $ 
+        ( try pDeclAssign <|>
         try pDecl <|>
         try pAssign <|> 
-        ((try pSwitch <|> 
-        try pDeclAssign <|>
+        try pSwitch <|> 
         -- pFunctionCall <|> TODO 
-         pReturn) <* pSemicolon)
+         pReturn) <* pSemicolon
          <|> pBlank
 
 pBlank :: Parser Stmt 
@@ -362,3 +361,27 @@ pConTm = do
 -- parsing utils 
 parseFromFile p file = runParser p file <$> readFile file
 
+doShadowing :: Func -> Func 
+doShadowing f = let stmts = funcBody f in 
+    f { funcBody = doStmts (M.fromList (map swap (funcArgs f))) stmts }
+
+doStmts :: M.Map String Ty -> List Stmt -> List Stmt
+doStmts _ [] = []
+doStmts vars (x:xs) = case x of 
+    Assign var tm -> case M.lookup var vars of 
+        Nothing -> error "assign before declare" 
+        Just ty -> DeclAssign ty var tm : doStmts vars xs
+    Decl ty var -> Decl ty var : doStmts (M.insert var ty vars) xs
+    DeclAssign ty var tm -> DeclAssign ty var tm : doStmts (M.insert var ty vars) xs
+    Switch { switchOn, cases } -> Switch {
+        switchOn,
+        cases = map (\y -> y {caseBody = doStmts vars (caseBody y)}) cases
+    } : doStmts vars xs
+    _ -> x : doStmts vars xs 
+
+process :: String -> IO Func 
+process file = do 
+    x <- readFile file 
+    case parse pFunc "" x of 
+        Left _ -> error "bruh"
+        Right tm -> pure $ doShadowing tm
