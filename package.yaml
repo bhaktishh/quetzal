@@ -41,7 +41,7 @@ library:
   source-dirs: src
 
 executables:
-  parse-to-idris-exe:
+  quetzal-exe:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
