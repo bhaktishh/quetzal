@@ -10,6 +10,7 @@ import Text.Megaparsec ( (<|>), runParser, many, some, Parsec, MonadParsec(try, 
 import Text.Megaparsec.Char (char, string, lowerChar, upperChar, alphaNumChar, space, digitChar)
 import qualified Data.Map as M
 import Data.Tuple (swap)
+import ToIdris
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
 -- is there a way i can add a list of variables and types to carry around? or should that be a second pass
@@ -379,9 +380,12 @@ doStmts vars (x:xs) = case x of
     } : doStmts vars xs
     _ -> x : doStmts vars xs 
 
-process :: String -> IO Func 
-process file = do 
-    x <- readFile file 
-    case parse pFunc "" x of 
+process :: String -> Prog 
+process x = case parse pProg "" x of 
         Left _ -> error "bruh"
-        Right tm -> pure $ doShadowing tm
+        Right tm -> tm { funcs = map doShadowing (funcs tm) }
+
+processFile :: String -> IO Prog 
+processFile file = do 
+    x <- readFile file
+    pure $ process x 

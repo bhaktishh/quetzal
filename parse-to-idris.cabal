@@ -45,6 +45,7 @@ executable parse-to-idris-exe
   other-modules:
       FirstTypes
       SSA
+      ToIdris
       Paths_parse_to_idris
   autogen-modules:
       Paths_parse_to_idris
