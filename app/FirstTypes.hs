@@ -1,4 +1,5 @@
 module FirstTypes where
+    import GHC.TypeLits (Nat)
 
     type List a = [a]
     data Ty = TyNat 
@@ -17,7 +18,7 @@ module FirstTypes where
         }
         deriving (Show, Eq)
 
-    data Tm = TmNat Int
+    data Tm = TmNat Nat
             | TmPlus Tm Tm 
             | TmVar String
             | TmTyVar String
@@ -58,6 +59,7 @@ module FirstTypes where
 
     data Constructor = Constructor {
         conName :: String, 
+        conErasedArgs :: List (Ty, String),
         conArgs :: List (Ty, String), 
         conTy :: Ty
     }

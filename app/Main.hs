@@ -9,6 +9,7 @@ import Data.Void (Void)
 import Text.Megaparsec ( (<|>), runParser, many, some, Parsec, MonadParsec(try, eof), parse, sepBy )
 import Text.Megaparsec.Char (char, string, lowerChar, upperChar, alphaNumChar, space, digitChar)
 import qualified Data.Map as M
+import GHC.TypeLits (Nat)
 import Data.Tuple (swap)
 import ToIdris
 
@@ -159,7 +160,7 @@ pTyCustom = do
 pNat :: Parser Tm 
 pNat = do
     nums <- some digitChar
-    pure $ TmNat ((read :: String -> Int) nums)
+    pure $ TmNat ((read :: String -> Nat) nums)
 
 pTyNat :: Parser Ty 
 pTyNat = string "Nat" >> pure TyNat 
@@ -189,14 +190,22 @@ pTy = try pTyCustom <|> try pTyFunc <|> try pTyFunctionCall <|> pTyNat <|> pTyTy
 pTyDeclConstructor :: Parser Constructor
 pTyDeclConstructor = do
     _ <- pSpaces $ string "constructor"
-    conName <- pSpaces pUpperString 
+    conName <- pSpaces pUpperString
+    conErasedArgs <- pSpaces pConErasedArgs
     conArgs <- pSpaces pConArgs
     _ <- pSpaces $ string "of"
     conTy <- pSpaces pTy
     _ <- pSpaces pSemicolon
     pure $ Constructor {
-        conName, conArgs, conTy
+        conName, conErasedArgs, conArgs, conTy
     }
+
+pConErasedArgs :: Parser [(Ty, String)]
+pConErasedArgs = do 
+    _ <- pSpaces $ char '<'
+    ls <- pFuncArgs
+    _ <- pSpaces $ char '>'
+    pure ls 
 
 pConArgs :: Parser [(Ty, String)]
 pConArgs = do 
@@ -389,3 +398,6 @@ processFile :: String -> IO Prog
 processFile file = do 
     x <- readFile file
     pure $ process x 
+
+writeIdris :: Prog -> String -> IO ()
+writeIdris p fpath = writeFile fpath (uProg p)

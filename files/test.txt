@@ -1,4 +1,0 @@
-func test<>() of Void {
-    T a = b;
-    a = c;
-}
