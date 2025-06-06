@@ -1,9 +1,9 @@
-name:                parse-to-idris
+name:                quetzal
 version:             0.1.0.0
-github:              "githubuser/parse-to-idris"
+github:              "bhaktishh/quetzal"
 license:             BSD-3-Clause
-author:              "Author name here"
-maintainer:          "example@example.com"
+author:              "Bhakti Shah"
+maintainer:          "bs266@st-andrews.ac.uk"
 copyright:           "2025 Author name here"
 
 extra-source-files:
@@ -17,7 +17,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/githubuser/parse-to-idris#readme>
+description:         Please see the README on GitHub at <https://github.com/bhaktishh/quetzal#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -49,10 +49,10 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - parse-to-idris
+    - quetzal
 
 tests:
-  parse-to-idris-test:
+  quetzal-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -60,4 +60,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - parse-to-idris
+    - quetzal
