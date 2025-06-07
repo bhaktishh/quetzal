@@ -4,8 +4,8 @@
 
 Quetzal is syntactically imperative, semantically* dependently-typed.
 
-*well, not really. currently it "compiles"** to Idris, which is dependently typed.
+\*well, not really. currently it "compiles\*\*" to Idris, which is dependently typed.
 
-**parses 
+\*\*parses 
 
 syntax in files/*.qt.
