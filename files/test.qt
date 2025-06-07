@@ -7,4 +7,3 @@ record Pair<Ty T> (Func(T a => Ty) p) {
     T fst; 
     p(fst) snd;
 }
-
