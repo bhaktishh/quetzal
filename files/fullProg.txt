@@ -7,8 +7,8 @@ type Pair<Ty T>(Func(T a => Ty) P) {
 }
 
 record Pair<Ty T> (Func(T a => Ty) p) {
-    T first; 
-    p(first) second;
+    T fst; 
+    p(fst) snd;
 }
 
 func append<Nat n, Nat m, Ty T> (Vect<T>(n) v1, Vect<T>(m) v2) of Vect<T>(n+m) {
