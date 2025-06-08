@@ -60,5 +60,5 @@ module ToIdris where
     uTm (TmPlus n1 n2) = "(" ++ uTm n1 ++ " + " ++ uTm n2 ++ ")"
     uTm (TmVar v) = v
     uTm (TmTyVar v) = map toLower v
-    uTm (TmFunctionCall f args) = undefined
+    uTm (TmFunctionCall f args) = f ++ " " ++ unwords (map uTm args)
     uTm (TmCon c args) = c ++ " " ++ unwords (map uTm args)

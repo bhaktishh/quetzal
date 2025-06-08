@@ -7,3 +7,10 @@ record Pair<Ty T> (Func(T a => Ty) p) {
     T fst; 
     p(fst) snd;
 }
+
+func test<>() of Void {
+    while(condition) {
+        ;
+    }
+    return y;
+}

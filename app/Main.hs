@@ -29,43 +29,28 @@ import ToIdris
 -- TODO: deal with semicolons right 
 
 {-
-
-type Vect<Nat n, Ty T> {
-    constructor Nil () of Vect<0,T>;
-    constructor Cons (T head, Vect<n, T> tail) of Vect<n+1, T>;
+foo_iterative(params){
+    header
+    while(condition){
+        loop_body
+    }
+    return tail
 }
 
-func append<Nat n, Nat m, Ty T> (Vect<n,T> v1, Vect<m,T> v2) of Vect<n+m, T> {
-    switch (v1, v2) {
-        case (Nil, v2) {
-            return v2;
-        }
-        case (Cons x xs, v2) {
-            v2 = append xs v2;
-            return Cons x v2;
-        }
-    }
+foo_recursive(params){
+    header
+    return foo_recursion(params, header_vars)
 }
 
-func test<>() {} of Void
-
-
-func replicate<Ty T> (T a, Nat n) of Vect<n,T> {
-    switch(n) {
-        case (0) {;}
-        case (1) {;}
+foo_recursion(params, header_vars){
+    if(!condition){
+        return tail
     }
-}
 
-func replicate<Ty T> (T a, Nat n) of Vect<n,T> {
-    switch(n) {
-        case (0) {return Nil;}
-        case (S n) {return Cons x (repl x n);}
-
-    }
+    loop_body
+    return foo_recursion(params, modified_header_vars)
 }
 -}
-
 
 main :: IO ()
 main = someFunc
@@ -142,7 +127,7 @@ pTm :: Parser Tm
 pTm = try pPlusTm <|> try pFunctionCall <|> try pConTm <|> pTm1
 
 pTm1 :: Parser Tm 
-pTm1 = try (pParens pTm) <|> try pVarTm <|> pTyVarTm <|> pNat
+pTm1 = try (pParens pTm) <|> try pVarTm <|> pTyVarTm <|> pNat <|> pBool
 
 pTyCustom :: Parser Ty 
 pTyCustom = do
@@ -156,6 +141,18 @@ pTyCustom = do
     pure $ TyCustom {
         tyName, tyErasedParams, tyParams
     }
+
+pTyBool :: Parser Ty 
+pTyBool = string "Bool" >> pure TyBool 
+
+pBool :: Parser Tm 
+pBool = pTrue <|> pFalse 
+
+pTrue :: Parser Tm 
+pTrue = string "True" >> pure (TmBool True)
+
+pFalse :: Parser Tm 
+pFalse = string "False" >> pure (TmBool False)
 
 pNat :: Parser Tm 
 pNat = do
@@ -184,7 +181,7 @@ pTyFunc = do
     }
 
 pTy :: Parser Ty 
-pTy = try pTyCustom <|> try pTyFunc <|> try pTyFunctionCall <|> pTyNat <|> pTyTy <|> pTyVoid <|> pTyVarTy 
+pTy = try pTyCustom <|> try pTyFunc <|> try pTyFunctionCall <|> pTyNat <|> pTyBool <|> pTyTy <|> pTyVoid <|> pTyVarTy 
 
 -- type declarations 
 pTyDeclConstructor :: Parser Constructor
@@ -368,6 +365,22 @@ pConTm = do
     args <- pSpaces pTm `sepBy` char ','
     _ <- pSpaces $ char ')'
     pure $ TmCon name args
+
+pWhile :: Parser Stmt 
+pWhile = do 
+    _ <- pSpaces $ string "while" 
+    _ <- pSpaces $ char '('
+    condition <- pSpaces pTm 
+    _ <- pSpaces $ char ')'
+    _ <- pSpaces $ char '{'
+    body <- many $ pSpaces pStmt
+    _ <- pSpaces $ char '}'
+    pure $ While {
+        condition, body
+    }
+
+pIf :: Parser Tm 
+pIf = undefined 
 -- parsing utils 
 parseFromFile p file = runParser p file <$> readFile file
 

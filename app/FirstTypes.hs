@@ -4,6 +4,7 @@ module FirstTypes where
     type List a = [a]
     data Ty = TyNat 
         | TyTy 
+        | TyBool 
         | TyVoid
         | TyVar String
         | TyFunctionCall String (List Tm)
@@ -20,6 +21,7 @@ module FirstTypes where
 
     data Tm = TmNat Nat
             | TmPlus Tm Tm 
+            | TmBool Bool
             | TmVar String
             | TmTyVar String
             | TmFunctionCall String (List Tm)
@@ -70,6 +72,15 @@ module FirstTypes where
             | DeclAssign Ty String Tm 
             | Return Tm
             | Blank
+            | While {
+                condition :: Tm, 
+                body :: List Stmt
+            }
+            | If {
+                cond :: Tm, 
+                thenCase :: List Stmt,
+                elseCase :: List Stmt
+            }
             | Switch {
                 switchOn :: List Tm,
                 cases :: List Case
