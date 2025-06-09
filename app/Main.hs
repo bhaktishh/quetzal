@@ -285,12 +285,14 @@ pFuncArgs = pSpaces
 
 pStmt :: Parser Stmt
 pStmt = pSpaces $ 
-        ( try pDeclAssign <|>
+        (try pDeclAssign <|>
         try pDecl <|>
         try pAssign <|> 
         try pSwitch <|> 
         -- pFunctionCall <|> TODO 
          pReturn) <* pSemicolon
+        <|> pIf
+        <|> pWhile
          <|> pBlank
 
 pBlank :: Parser Stmt 
@@ -379,8 +381,23 @@ pWhile = do
         condition, body
     }
 
-pIf :: Parser Tm 
-pIf = undefined 
+pIf :: Parser Stmt 
+pIf = do 
+    _ <- pSpaces $ string "if"
+    _ <- pSpaces $ char '('
+    cond <- pSpaces pTm
+    _ <- pSpaces $ char ')'
+    _ <- pSpaces $ char '{'
+    thenCase <- many $ pSpaces pStmt 
+    _ <- pSpaces $ char '}'
+    _ <- pSpaces $ string "else"
+    _ <- pSpaces $ char '{'
+    elseCase <- many $ pSpaces pStmt 
+    _ <- pSpaces $ char '}'
+    pure $ If {
+        cond, thenCase, elseCase
+    }
+ 
 -- parsing utils 
 parseFromFile p file = runParser p file <$> readFile file
 

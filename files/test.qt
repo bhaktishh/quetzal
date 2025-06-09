@@ -1,16 +1,2 @@
-type Vect<Ty T>(Nat n) {
-    constructor Nil<>() of Vect<T>(0);
-    constructor Cons<>(T head, Vect<T>(n) tail) of Vect<T>(n+1);
-}
-
-record Pair<Ty T> (Func(T a => Ty) p) {
-    T fst; 
-    p(fst) snd;
-}
-
-func test<>() of Void {
-    while(condition) {
-        ;
-    }
-    return y;
+func test2<Ty T> (T a, Nat n) of Vect<n,T>() {
 }
