@@ -46,6 +46,7 @@ executable quetzal-exe
       FirstTypes
       SSA
       ToIdris
+      Types
       Paths_quetzal
   autogen-modules:
       Paths_quetzal
