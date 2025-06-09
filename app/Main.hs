@@ -11,6 +11,7 @@ import Text.Megaparsec.Char (char, string, lowerChar, upperChar, alphaNumChar, s
 import qualified Data.Map as M
 import GHC.TypeLits (Nat)
 import Data.Tuple (swap)
+import Data.List (unsnoc)
 import ToIdris
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
@@ -28,29 +29,6 @@ import ToIdris
 -- TODO: remove unnecessary {}, (), <>, of Void ... eg Nil() 
 -- TODO: deal with semicolons right 
 
-{-
-foo_iterative(params){
-    header
-    while(condition){
-        loop_body
-    }
-    return tail
-}
-
-foo_recursive(params){
-    header
-    return foo_recursion(params, header_vars)
-}
-
-foo_recursion(params, header_vars){
-    if(!condition){
-        return tail
-    }
-
-    loop_body
-    return foo_recursion(params, modified_header_vars)
-}
--}
 
 main :: IO ()
 main = someFunc
@@ -267,7 +245,8 @@ pFunc = do
     _ <- pSpaces $ string "of"
     funcRetType <- pSpaces pTy 
     _ <- pSpaces $ char '{'
-    funcBody <- pSpaces $ many pStmt
+    body <- pSpaces $ many pStmt
+    let funcBody = unsnoc body
     _ <- pSpaces $ char '}'
     pure $ Func {
         funcName, funcRetType, funcErasedArgs, funcArgs, funcBody
@@ -401,9 +380,13 @@ pIf = do
 -- parsing utils 
 parseFromFile p file = runParser p file <$> readFile file
 
+combine :: Maybe ([Stmt], Stmt) -> List Stmt 
+combine Nothing = []
+combine (Just (xs, x)) = xs ++ [x]
+
 doShadowing :: Func -> Func 
 doShadowing f = let stmts = funcBody f in 
-    f { funcBody = doStmts (M.fromList (map swap (funcArgs f))) stmts }
+    f { funcBody = unsnoc $ doStmts (M.fromList (map swap (funcArgs f))) (combine stmts) }
 
 doStmts :: M.Map String Ty -> List Stmt -> List Stmt
 doStmts _ [] = []
@@ -418,6 +401,35 @@ doStmts vars (x:xs) = case x of
         cases = map (\y -> y {caseBody = doStmts vars (caseBody y)}) cases
     } : doStmts vars xs
     _ -> x : doStmts vars xs 
+
+{-
+foo_iterative(params){
+    header
+    while(condition){
+        loop_body
+    }
+    return tail
+}
+
+foo_recursive(params){
+    header
+    return foo_recursion(params, header_vars)
+}
+
+foo_recursion(params, header_vars){
+    if(!condition){
+        return tail
+    }
+
+    loop_body
+    return foo_recursion(params, modified_header_vars)
+}
+-}
+unLoop :: Func -> List Func 
+unLoop Func { funcName, funcRetType, funcErasedArgs, funcArgs, funcBody} = undefined  
+
+unSwitch :: Func -> Func 
+unSwitch f = undefined 
 
 process :: String -> Prog 
 process x = case parse pProg "" x of 

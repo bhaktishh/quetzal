@@ -39,7 +39,8 @@ module FirstTypes where
         funcRetType :: Ty, 
         funcErasedArgs :: List (Ty, String),
         funcArgs :: List (Ty, String),
-        funcBody :: List Stmt
+        funcBody :: Maybe ([Stmt], Stmt)
+
     }
         deriving (Show, Eq)
 
@@ -68,7 +69,7 @@ module FirstTypes where
         deriving (Show, Eq)
 
     data Stmt = Assign String Tm
-            | Decl Ty String 
+            | Decl Ty String -- TODO this must go 
             | DeclAssign Ty String Tm 
             | Return Tm
             | Blank
