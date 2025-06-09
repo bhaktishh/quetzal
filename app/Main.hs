@@ -266,8 +266,8 @@ pStmt :: Parser Stmt
 pStmt = pSpaces $ 
         (try pDeclAssign <|>
         try pDecl <|>
-        try pAssign <|> 
-        try pSwitch <|> 
+        try pAssign <|>
+        try pSwitch <|>
         -- pFunctionCall <|> TODO 
          pReturn) <* pSemicolon
         <|> pIf

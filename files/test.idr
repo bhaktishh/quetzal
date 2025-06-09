@@ -1,2 +1,4 @@
-test2 : (t : Type) -> (a : t) -> (n : Nat) -> Vect n t 
- 
+test2 : (n : Nat) -> Nat
+test2  n = let n : Nat = (n + 2) in
+	 let n : Nat = (n + 5) in
+	n

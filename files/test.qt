@@ -1,2 +1,5 @@
-func test2<Ty T> (T a, Nat n) of Vect<n,T>() {
+func test2<>(Nat n) of Nat {
+    n = n + 2;
+    n = n + 5;
+    return n;
 }

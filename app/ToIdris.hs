@@ -17,7 +17,12 @@ module ToIdris where
         funcErasedArgs, funcArgs, funcBody } = 
             funcName ++ " : " ++ concatMap uTyDeclParam funcErasedArgs ++
             concatMap uTyDeclParam funcArgs ++ uTy funcRetType ++ "\n" ++ 
-            " " 
+            funcName ++ " " ++ unwords (map (map toLower . snd) funcErasedArgs) ++ " " ++ unwords (map (map toLower . snd) funcArgs) ++ " = " ++
+            uFuncBody funcBody 
+
+    uFuncBody :: Maybe ([Stmt], Stmt) -> String 
+    uFuncBody Nothing = ""
+    uFuncBody (Just (xs, x)) = unwords (map uStmt xs) ++ uStmt x
 
     uTypes :: Decl -> String
     uTypes (Ty tdecl) = uTyDecl tdecl
@@ -76,3 +81,5 @@ module ToIdris where
     uStmt (Return tm) = uTm tm 
     uStmt Blank = "\n"
     uStmt (Switch {switchOn, cases}) = error "TODO"
+    uStmt (If {cond, thenCase, elseCase}) = error "TODO"
+    uStmt _ = error "should have been transformed bruh"
