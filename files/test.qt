@@ -1,2 +1,4 @@
-func f() of Nat {
+func append<Nat n, Nat m, Ty T> (Vect<T>(n) v1, Vect<T>(m) v2) of Vect<T>(n+m) {
+    let Nat x = 5;
+    return x;
 }

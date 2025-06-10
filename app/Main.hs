@@ -8,7 +8,7 @@ import Data.Tuple (swap)
 import Data.Void (Void)
 import GHC.TypeLits (Nat)
 import Lib
-import Text.Megaparsec (MonadParsec (eof, try), Parsec, many, parse, runParser, sepBy, some, (<|>), sepBy1)
+import Text.Megaparsec (MonadParsec (eof, try), Parsec, many, parse, runParser, sepBy, some, (<|>), sepBy1, sepEndBy1)
 import Text.Megaparsec.Char
 import ToIdris
 import Types
@@ -92,8 +92,8 @@ pFunc :: Parser Func
 pFunc = do
   _ <- pSpaces $ string "func"
   funcName <- pSpaces pLowerStr
-  impArgs <-  pSpaces (try pImplicit <|> pure [])
-  expArgs <- pSpaces $ pParens (try pFuncArgs <|> pure [])
+  impArgs <-  try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> try (pSpaces (pAngles pFuncArgs)) <|> pure []
+  expArgs <-  try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs)
   let funcArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   _ <- pSpaces $ string "of"
   funcRetTy <- pSpaces pTy
@@ -109,20 +109,16 @@ pFunc = do
 mkAnnParam :: Bool -> (Ty, String) -> AnnParam
 mkAnnParam b x = AnnParam x b
 
-pImplicit :: Parser (List (Ty, String))
-pImplicit = do
-  args <- pAngles pFuncArgs
-  pure args
-
+-- if this tries to parse an empty string it loops, probably because it calls pTy and keeps going 
 pFuncArgs :: Parser (List (Ty, String))
 pFuncArgs =
   pSpaces
-    ( ( try $ (,)
+      ( try $ (,)
           <$> pSpaces pTy
           <*> pSpaces pVar
       )
-        `sepBy1` char ','
-    )
+        `sepBy` char ','
+    
     <|> pure []
 
 pVarStr :: Parser String
@@ -145,8 +141,8 @@ pTyDecl :: Parser TyDecl
 pTyDecl = do
   _ <- pSpaces $ string "type"
   tyDeclName <- pSpaces pUpperStr
-  impArgs <- try (pSpaces pImplicit) <|> pure []
-  expArgs <- try (pSpaces (pParens pFuncArgs)) <|> pure []
+  impArgs <- try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> pSpaces (pAngles pFuncArgs) <|> pure []
+  expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs) <|> pure []
   let tyDeclParams = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   tyDeclConstructors <- pSpaces $ pCurlies $ many pTyDeclConstructor
   pure $
@@ -160,8 +156,8 @@ pTyDeclConstructor :: Parser Constructor
 pTyDeclConstructor = do
   _ <- pSpaces $ string "constructor"
   conName <- pSpaces pUpperStr
-  impArgs <- pSpaces $ try pImplicit <|> pure []
-  expArgs <- pSpaces $ try (pParens pFuncArgs) <|> pure []
+  impArgs <- try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> pSpaces (pAngles pFuncArgs) <|> pure []
+  expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs) <|> pure []
   let conArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   _ <- pSpaces $ string "of"
   conTy <- pSpaces pTy
@@ -177,8 +173,8 @@ pRecDecl :: Parser RecDecl
 pRecDecl = do
   _ <- pSpaces $ string "record"
   recDeclName <- pSpaces pUpperStr
-  impArgs <- try $ pSpaces pImplicit
-  expArgs <- try $ pSpaces $ pParens pFuncArgs
+  impArgs <- try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> pSpaces (pAngles pFuncArgs) <|> pure []
+  expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs) <|> pure []
   let recDeclParams = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   recDeclFields <- pSpaces $ pCurlies $ many pRecDeclField
   pure $
@@ -273,7 +269,7 @@ pTmCon = do
 pTmBlock :: Parser Tm
 pTmBlock = do
   stmts <- pSpaces $ many pStmt
-  tm <- pSpaces pTm
+  tm <- pSpaces pTm0
   pure $ TmBlock stmts tm
 
 pTmReturn :: Parser Tm
@@ -365,12 +361,11 @@ pTy =
     <|> try pTyCustom
     <|> try pTyTm
 
-pTm :: Parser Tm
-pTm = try pPlusTm 
+pTm0 :: Parser Tm
+pTm0 = try pPlusTm 
   <|> try pTmReturn 
   <|> try pFuncCall
   <|> try pTmCon 
-  <|> try pTmBlock 
   <|> try pTm1
 
 pTm1 :: Parser Tm 
@@ -378,6 +373,9 @@ pTm1 = try (pParens pTm)
   <|> try pTmVar 
   <|> pNat 
   <|> pBool
+
+pTm :: Parser Tm
+pTm = try pTmBlock <|> try pTm0
 
 -- -- parsing utils
 parseFromFile p file = runParser p file <$> readFile file
