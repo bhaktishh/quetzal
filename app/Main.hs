@@ -46,7 +46,8 @@ reserved =
     "return",
     "case",
     "Void",
-    "switch"
+    "switch",
+    "Ty"
   ]
 
 pSpaces :: Parser a -> Parser a
@@ -81,8 +82,11 @@ tmParse str = case parse pProg "" str of
 pTLDecl :: Parser Decl
 pTLDecl = (Ty <$> pTyDecl) <|> (Rec <$> pRecDecl)
 
-pProg :: Parser Prog
-pProg = ((map PDecl <$> many (pSpaces pTLDecl)) <|> (map PFunc <$> many (pSpaces pFunc))) <* eof
+pProgEl :: Parser ProgEl 
+pProgEl = pSpaces ((PDecl <$> pTLDecl) <|> (PFunc <$> pFunc)) 
+
+pProg :: Parser Prog 
+pProg = many (pSpaces pProgEl) <* eof
 
 pFunc :: Parser Func
 pFunc = do
@@ -90,7 +94,7 @@ pFunc = do
   funcName <- pSpaces pLowerStr
   impArgs <- try $ pSpaces pImplicit
   expArgs <- pSpaces $ pParens pFuncArgs
-  let funcArgs = (map (mkAnnParam False) impArgs) ++ (map (mkAnnParam True) expArgs)
+  let funcArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   _ <- pSpaces $ string "of"
   funcRetTy <- pSpaces pTy
   funcBody <- pSpaces $ pCurlies pTm
@@ -175,7 +179,7 @@ pRecDecl = do
   recDeclName <- pSpaces pUpperStr
   impArgs <- try $ pSpaces pImplicit
   expArgs <- try $ pSpaces $ pParens pFuncArgs
-  let recDeclParams = (map (mkAnnParam False) impArgs) ++ (map (mkAnnParam True) expArgs)
+  let recDeclParams = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   recDeclFields <- pSpaces $ pCurlies $ many pRecDeclField
   pure $
     RecDecl
@@ -221,7 +225,7 @@ pAssign :: Parser Stmt
 pAssign = do
   var <- pSpaces pLowerStr
   _ <- pSpaces $ char '='
-  rhs <- pSpaces pTm
+  rhs <- pSpaces pTm1
   _ <- pSpaces $ char ';'
   pure $ Assign var rhs
 
@@ -230,7 +234,7 @@ pDeclAssign = do
   ty <- pSpaces pTy
   var <- pSpaces pLowerStr
   _ <- pSpaces $ char '='
-  rhs <- pSpaces pTm
+  rhs <- pSpaces pTm1
   _ <- pSpaces $ char ';'
   pure $ DeclAssign ty var rhs
 
@@ -246,7 +250,10 @@ pWhile = do
       }
 
 pStmt :: Parser Stmt
-pStmt = pWhile <|> try pDeclAssign <|> pAssign
+pStmt = 
+  try pDeclAssign 
+  <|> try pAssign
+  -- <|> try pWhile
 
 pPlusTm :: Parser Tm
 pPlusTm = do
@@ -264,13 +271,14 @@ pTmCon = do
 pTmBlock :: Parser Tm
 pTmBlock = do
   stmts <- pSpaces $ many pStmt
-  tm <- pSpaces pTm
+  tm <- pSpaces pTm1
   pure $ TmBlock stmts tm
 
 pTmReturn :: Parser Tm
 pTmReturn = do
   _ <- pSpaces $ string "return"
   tm <- pSpaces pTm
+  _ <- pSpaces $ char ';'
   pure $ TmReturn tm
 
 pTmVar :: Parser Tm
@@ -278,8 +286,8 @@ pTmVar = TmVar <$> pVar
 
 pFuncCall :: Parser Tm
 pFuncCall = do
-  name <- pSpaces pTm
-  args <- pSpaces $ pParens $ pTm `sepBy` char ','
+  name <- pSpaces pTm1
+  args <- pSpaces $ pParens $ (pSpaces pTm1 `sepBy` char ',') <|> pure []
   pure $ TmFuncCall name args
 
 pIf :: Parser Tm
@@ -314,7 +322,7 @@ pCase = do
       }
 
 pTyTm :: Parser Ty
-pTyTm = TyTm <$> pTm2
+pTyTm = TyTm <$> pTm
 
 pTmTy :: Parser Tm
 pTmTy = TmTy <$> pTy
@@ -355,19 +363,16 @@ pTy =
     <|> try pTyCustom
     <|> try pTyTm
 
-pTm2 :: Parser Tm
-pTm2 = try pPlusTm <|> pTm1
-
 pTm :: Parser Tm
-pTm = pTmTy <|> pTm2
+pTm = try pPlusTm <|> try pFuncCall <|> try pTmCon <|> pTm1
 
--- <|> try pFuncCall <|> try pTmCon <|> try pTmBlock <|> try pIf <|> try pTmSwitch  <|> try pTmReturn <|>  pTm1
-
-pTm1 :: Parser Tm
-pTm1 = try (pParens pTm) <|> try pTmVar <|> pNat <|> pBool
-
--- pTy :: Parser Ty
--- pTy = try pTyCustom <|> try pTyFunc <|> try pTyFunctionCall <|> pTyNat <|> pTyBool <|> pTyTy <|> pTyVoid <|> pTyVarTy
+pTm1 :: Parser Tm 
+pTm1 = try pTmBlock  
+  <|> try (pParens pTm) 
+  <|> try pTmVar 
+  <|> pNat 
+  <|> pBool
+  <|> pTmReturn 
 
 -- -- parsing utils
 parseFromFile p file = runParser p file <$> readFile file
