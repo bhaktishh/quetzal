@@ -4,13 +4,20 @@ import GHC.TypeLits (Nat)
 
 type List a = [a]
 
-data Prog = PDecl Decl | PFunc Func
+data ProgEl = PDecl Decl | PFunc Func
+  deriving (Show, Eq)
+
+type Prog = List ProgEl
 
 data Ty
   = TyNat
   | TyBool
   | TyUnit
   | TyTy
+  | TyFunc
+      { tyFuncArgs :: List (Ty, String),
+        tyFuncRetTy :: Ty
+      }
   | TyCustom
       { tyName :: String,
         tyParams :: List Tm
@@ -23,6 +30,7 @@ data Tm
   | TmPlus Tm Tm
   | TmBool Bool
   | TmUnit
+  | TmTy Ty
   | TmVar String
   | TmCon String (List Tm)
   | TmFunc Func
@@ -60,6 +68,7 @@ data Func = Func
   deriving (Show, Eq)
 
 data Decl = Ty TyDecl | Rec RecDecl
+  deriving (Show, Eq)
 
 data TyDecl = TyDecl
   { tyDeclName :: String,

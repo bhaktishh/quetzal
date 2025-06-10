@@ -33,6 +33,22 @@ main = someFunc
 
 type Parser = Parsec Void String
 
+reserved :: [String]
+reserved =
+  [ "func",
+    "data",
+    "constructor",
+    "type",
+    "Func",
+    "of",
+    "while",
+    "record",
+    "return",
+    "case",
+    "Void",
+    "switch"
+  ]
+
 pSpaces :: Parser a -> Parser a
 pSpaces p = space *> p <* space
 
@@ -45,9 +61,16 @@ pParens p = do
 
 pCurlies :: Parser a -> Parser a
 pCurlies p = do
-  _ <- pSpaces $ char '('
+  _ <- pSpaces $ char '{'
   x <- p
-  _ <- pSpaces $ char ')'
+  _ <- pSpaces $ char '}'
+  pure x
+
+pAngles :: Parser a -> Parser a
+pAngles p = do
+  _ <- pSpaces $ char '<'
+  x <- p
+  _ <- pSpaces $ char '>'
   pure x
 
 tmParse :: String -> Prog
@@ -59,7 +82,7 @@ pTLDecl :: Parser Decl
 pTLDecl = (Ty <$> pTyDecl) <|> (Rec <$> pRecDecl)
 
 pProg :: Parser Prog
-pProg = (PDecl <$> pTLDecl) <|> (PFunc <$> pFunc) <* eof
+pProg = ((map PDecl <$> many (pSpaces pTLDecl)) <|> (map PFunc <$> many (pSpaces pFunc))) <* eof
 
 pFunc :: Parser Func
 pFunc = do
@@ -84,22 +107,29 @@ mkAnnParam b x = AnnParam x b
 
 pImplicit :: Parser (List (Ty, String))
 pImplicit = do
-  _ <- pSpaces $ char '<'
-  args <- pFuncArgs
-  _ <- pSpaces $ char '>'
+  args <- pAngles pFuncArgs
   pure args
 
 pFuncArgs :: Parser (List (Ty, String))
 pFuncArgs =
   pSpaces
-    ( (,)
-        <$> pSpaces pTy
-        <*> pSpaces pVarStr
+    ( ( (,)
+          <$> pSpaces pTy
+          <*> pSpaces pVar
+      )
+        `sepBy` char ','
     )
-    `sepBy` char ','
+    <|> pure []
 
 pVarStr :: Parser String
 pVarStr = (:) <$> letterChar <*> many alphaNumChar
+
+pVar :: Parser String
+pVar = try $ do
+  x <- pVarStr
+  if x `elem` reserved
+    then fail $ x ++ " reserved"
+    else return x
 
 pUpperStr :: Parser String
 pUpperStr = (:) <$> upperChar <*> many alphaNumChar
@@ -111,9 +141,9 @@ pTyDecl :: Parser TyDecl
 pTyDecl = do
   _ <- pSpaces $ string "type"
   tyDeclName <- pSpaces pUpperStr
-  impArgs <- try $ pSpaces pImplicit
-  expArgs <- try $ pSpaces $ pParens pFuncArgs
-  let tyDeclParams = (map (mkAnnParam False) impArgs) ++ (map (mkAnnParam True) expArgs)
+  impArgs <- try (pSpaces pImplicit) <|> pure []
+  expArgs <- try (pSpaces (pParens pFuncArgs)) <|> pure []
+  let tyDeclParams = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   tyDeclConstructors <- pSpaces $ pCurlies $ many pTyDeclConstructor
   pure $
     TyDecl
@@ -126,9 +156,9 @@ pTyDeclConstructor :: Parser Constructor
 pTyDeclConstructor = do
   _ <- pSpaces $ string "constructor"
   conName <- pSpaces pUpperStr
-  impArgs <- try $ pSpaces pImplicit
-  expArgs <- try $ pSpaces $ pParens pFuncArgs
-  let conArgs = (map (mkAnnParam False) impArgs) ++ (map (mkAnnParam True) expArgs)
+  impArgs <- pSpaces $ try pImplicit <|> pure []
+  expArgs <- pSpaces $ try (pParens pFuncArgs) <|> pure []
+  let conArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   _ <- pSpaces $ string "of"
   conTy <- pSpaces pTy
   _ <- pSpaces $ char ';'
@@ -157,7 +187,7 @@ pRecDecl = do
 pRecDeclField :: Parser (Ty, String)
 pRecDeclField = do
   ty <- pSpaces pTy
-  var <- pSpaces pVarStr
+  var <- pSpaces pVar
   _ <- pSpaces $ char ';'
   pure (ty, var)
 
@@ -187,313 +217,157 @@ pTyTy = string "Ty" >> pure TyTy
 pTyUnit :: Parser Ty
 pTyUnit = string "Void" >> pure TyUnit
 
-pTm :: Parser Tm
-pTm = undefined
+pAssign :: Parser Stmt
+pAssign = do
+  var <- pSpaces pLowerStr
+  _ <- pSpaces $ char '='
+  rhs <- pSpaces pTm
+  _ <- pSpaces $ char ';'
+  pure $ Assign var rhs
+
+pDeclAssign :: Parser Stmt
+pDeclAssign = do
+  ty <- pSpaces pTy
+  var <- pSpaces pLowerStr
+  _ <- pSpaces $ char '='
+  rhs <- pSpaces pTm
+  _ <- pSpaces $ char ';'
+  pure $ DeclAssign ty var rhs
+
+pWhile :: Parser Stmt
+pWhile = do
+  _ <- pSpaces $ string "while"
+  condition <- pSpaces $ pParens pTm
+  body <- pSpaces $ pCurlies pTm
+  pure $
+    While
+      { condition,
+        body
+      }
+
+pStmt :: Parser Stmt
+pStmt = pWhile <|> try pDeclAssign <|> pAssign
+
+pPlusTm :: Parser Tm
+pPlusTm = do
+  x <- pSpaces pTm1
+  _ <- pSpaces $ char '+'
+  y <- pSpaces pTm
+  pure $ TmPlus x y
+
+pTmCon :: Parser Tm
+pTmCon = do
+  name <- pSpaces pUpperStr
+  args <- pSpaces $ pParens $ pTm `sepBy` char ','
+  pure $ TmCon name args
+
+pTmBlock :: Parser Tm
+pTmBlock = do
+  stmts <- pSpaces $ many pStmt
+  tm <- pSpaces pTm
+  pure $ TmBlock stmts tm
+
+pTmReturn :: Parser Tm
+pTmReturn = do
+  _ <- pSpaces $ string "return"
+  tm <- pSpaces pTm
+  pure $ TmReturn tm
+
+pTmVar :: Parser Tm
+pTmVar = TmVar <$> pVar
+
+pFuncCall :: Parser Tm
+pFuncCall = do
+  name <- pSpaces pTm
+  args <- pSpaces $ pParens $ pTm `sepBy` char ','
+  pure $ TmFuncCall name args
+
+pIf :: Parser Tm
+pIf = do
+  _ <- pSpaces $ string "if"
+  cond <- pSpaces $ pParens pTm
+  t <- pSpaces $ pCurlies pTm
+  _ <- pSpaces $ string "else"
+  e <- pSpaces $ pCurlies pTm
+  pure $ TmIf cond t e
+
+pTmSwitch :: Parser Tm
+pTmSwitch = do
+  _ <- pSpaces $ string "switch"
+  switchOn <- pSpaces $ pParens $ pTm `sepBy` char ','
+  cases <- pSpaces $ pCurlies $ many pCase
+  pure $
+    TmSwitch
+      { switchOn,
+        cases
+      }
+
+pCase :: Parser Case
+pCase = do
+  _ <- pSpaces $ string "case"
+  caseOn <- pSpaces $ pParens $ pTm `sepBy` char ','
+  caseBody <- pSpaces $ pCurlies pTm
+  pure $
+    Case
+      { caseOn,
+        caseBody
+      }
+
+pTyTm :: Parser Ty
+pTyTm = TyTm <$> pTm2
+
+pTmTy :: Parser Tm
+pTmTy = TmTy <$> pTy
+
+pTyCustom :: Parser Ty
+pTyCustom = do
+  tyName <- pSpaces pUpperStr
+  impParams <- try (pSpaces $ pAngles $ pTm `sepBy` char ',') <|> pure []
+  expParams <- try (pSpaces $ pParens $ pTm `sepBy` char ',') <|> pure []
+  let tyParams = impParams ++ expParams
+  pure $
+    TyCustom
+      { tyName,
+        tyParams
+      }
+
+pTyFunc :: Parser Ty
+pTyFunc = do
+  _ <- pSpaces $ string "Func"
+  _ <- pSpaces $ char '('
+  tyFuncArgs <- pFuncArgs
+  _ <- pSpaces $ string "=>"
+  tyFuncRetTy <- pSpaces pTy
+  _ <- pSpaces $ char ')'
+  pure $
+    TyFunc
+      { tyFuncArgs,
+        tyFuncRetTy
+      }
 
 pTy :: Parser Ty
-pTy = undefined
+pTy =
+  try pTyBool
+    <|> try pTyNat
+    <|> try pTyTy
+    <|> try pTyUnit
+    <|> try pTyFunc
+    <|> try pTyCustom
+    <|> try pTyTm
 
--- -- function definitions
+pTm2 :: Parser Tm
+pTm2 = try pPlusTm <|> pTm1
 
--- pFunc :: Parser Func
--- pFunc = do
---   _ <- pSpaces $ string "func"
---   funcName <- pSpaces pLowerString
---   _ <- pSpaces $ char '<'
---   funcErasedArgs <- pSpaces pFuncArgs
---   _ <- pSpaces $ char '>'
---   _ <- pSpaces $ char '('
---   funcArgs <- pSpaces pFuncArgs
---   _ <- pSpaces $ char ')'
---   _ <- pSpaces $ string "of"
---   funcRetType <- pSpaces pTy
---   _ <- pSpaces $ char '{'
---   body <- pSpaces $ many pStmt
---   let funcBody = unsnoc body
---   _ <- pSpaces $ char '}'
---   pure $
---     Func
---       { funcName,
---         funcRetType,
---         funcErasedArgs,
---         funcArgs,
---         funcBody
---       }
+pTm :: Parser Tm
+pTm = pTmTy <|> pTm2
 
--- pLowerString :: Parser String
--- pLowerString = (:) <$> lowerChar <*> many alphaNumChar
+-- <|> try pFuncCall <|> try pTmCon <|> try pTmBlock <|> try pIf <|> try pTmSwitch  <|> try pTmReturn <|>  pTm1
 
--- pUpperString :: Parser String
--- pUpperString = (:) <$> upperChar <*> many alphaNumChar
-
--- pVar :: Parser String
--- pVar = pLowerString
-
--- pVarTm :: Parser Tm
--- pVarTm = TmVar <$> pVar
-
--- pTyVarTm :: Parser Tm
--- pTyVarTm = TmTyVar <$> pTyVar
-
--- pTyVarTy :: Parser Ty
--- pTyVarTy = TyVar <$> pTyVar
-
--- pTyFunctionCall :: Parser Ty
--- pTyFunctionCall = do
---   name <- pSpaces $ pTyVar <|> pVar
---   _ <- pSpaces $ char '('
---   args <- pSpaces $ pTm `sepBy` char ','
---   _ <- pSpaces $ char ')'
---   pure $ TyFunctionCall name args
-
--- pPlusTm :: Parser Tm
--- pPlusTm = do
---   x <- pSpaces pTm1
---   _ <- char '+'
---   y <- pSpaces pTm
---   pure $ TmPlus x y
-
--- pTm :: Parser Tm
--- pTm = try pPlusTm <|> try pFunctionCall <|> try pConTm <|> pTm1
-
--- pTm1 :: Parser Tm
--- pTm1 = try (pParens pTm) <|> try pVarTm <|> pTyVarTm <|> pNat <|> pBool
-
--- pTyCustom :: Parser Ty
--- pTyCustom = do
---   tyName <- pSpaces pUpperString
---   _ <- pSpaces $ char '<'
---   tyErasedParams <- pSpaces pTm `sepBy` char ','
---   _ <- pSpaces $ char '>'
---   _ <- pSpaces $ char '('
---   tyParams <- pSpaces pTm `sepBy` char ','
---   _ <- pSpaces $ char ')'
---   pure $
---     TyCustom
---       { tyName,
---         tyErasedParams,
---         tyParams
---       }
-
--- pTyFunc :: Parser Ty
--- pTyFunc = do
---   _ <- pSpaces $ string "Func"
---   _ <- pSpaces $ char '('
---   tyFuncArgs <- pFuncArgs
---   _ <- pSpaces $ string "=>"
---   tyFuncRetTy <- pSpaces pTy
---   _ <- pSpaces $ char ')'
---   pure $
---     TyFunc
---       { tyFuncArgs,
---         tyFuncRetTy
---       }
+pTm1 :: Parser Tm
+pTm1 = try (pParens pTm) <|> try pTmVar <|> pNat <|> pBool
 
 -- pTy :: Parser Ty
 -- pTy = try pTyCustom <|> try pTyFunc <|> try pTyFunctionCall <|> pTyNat <|> pTyBool <|> pTyTy <|> pTyVoid <|> pTyVarTy
-
--- -- type declarations
--- pTyDeclConstructor :: Parser Constructor
--- pTyDeclConstructor = do
---   _ <- pSpaces $ string "constructor"
---   conName <- pSpaces pUpperString
---   conErasedArgs <- pSpaces pConErasedArgs
---   conArgs <- pSpaces pConArgs
---   _ <- pSpaces $ string "of"
---   conTy <- pSpaces pTy
---   _ <- pSpaces pSemicolon
---   pure $
---     Constructor
---       { conName,
---         conErasedArgs,
---         conArgs,
---         conTy
---       }
-
--- pConErasedArgs :: Parser [(Ty, String)]
--- pConErasedArgs = do
---   _ <- pSpaces $ char '<'
---   ls <- pFuncArgs
---   _ <- pSpaces $ char '>'
---   pure ls
-
--- pConArgs :: Parser [(Ty, String)]
--- pConArgs = do
---   _ <- pSpaces $ char '('
---   ls <- pFuncArgs
---   _ <- pSpaces $ char ')'
---   pure ls
-
--- pRecDecl :: Parser RecDecl
--- pRecDecl = do
---   _ <- pSpaces $ string "record"
---   recDeclName <- pSpaces pUpperString
---   _ <- pSpaces $ char '<'
---   recDeclErasedParams <- pSpaces pFuncArgs
---   _ <- pSpaces $ char '>'
---   _ <- pSpaces $ char '('
---   recDeclParams <- pSpaces pFuncArgs
---   _ <- pSpaces $ char ')'
---   _ <- pSpaces $ char '{'
---   recDeclFields <- pSpaces $ many pRecDeclField
---   _ <- pSpaces $ char '}'
---   pure $
---     RecDecl
---       { recDeclName,
---         recDeclErasedParams,
---         recDeclParams,
---         recDeclFields
---       }
-
--- pTyDecl :: Parser TyDecl
--- pTyDecl = do
---   _ <- pSpaces $ string "type"
---   tyDeclName <- pSpaces pUpperString
---   _ <- pSpaces $ char '<'
---   tyDeclErasedParams <- pSpaces pFuncArgs
---   _ <- pSpaces $ char '>'
---   _ <- pSpaces $ char '('
---   tyDeclParams <- pSpaces pFuncArgs
---   _ <- pSpaces $ char ')'
---   _ <- pSpaces $ char '{'
---   tyDeclConstructors <- pSpaces $ many pTyDeclConstructor
---   _ <- pSpaces $ char '}'
---   pure $
---     TyDecl
---       { tyDeclName,
---         tyDeclErasedParams,
---         tyDeclParams,
---         tyDeclConstructors
---       }
-
--- -- statements
-
--- pStmt :: Parser Stmt
--- pStmt =
---   pSpaces $
---     ( try pDeclAssign
---         <|> try pDecl
---         <|> try pAssign
---         <|> try pSwitch
---         <|>
---         -- pFunctionCall <|> TODO
---         pReturn
---     )
---       <* pSemicolon
---         <|> pIf
---         <|> pWhile
---         <|> pBlank
-
--- pBlank :: Parser Stmt
--- pBlank = char ';' >> pure Blank
-
--- pSwitch :: Parser Stmt
--- pSwitch = do
---   _ <- pSpaces $ string "switch"
---   _ <- pSpaces $ char '('
---   switchOn <- pSpaces pTm `sepBy` char ','
---   _ <- pSpaces $ char ')'
---   _ <- pSpaces $ char '{'
---   cases <- some $ pSpaces pCase
---   _ <- pSpaces $ char '}'
---   pure $
---     Switch
---       { switchOn,
---         cases
---       }
-
--- pCase :: Parser Case
--- pCase = do
---   _ <- pSpaces $ string "case"
---   _ <- pSpaces $ char '('
---   caseOn <- pSpaces pTm `sepBy` char ','
---   _ <- pSpaces $ char ')'
---   _ <- pSpaces $ char '{'
---   caseBody <- many $ pSpaces pStmt
---   _ <- pSpaces $ char '}'
---   pure $
---     Case
---       { caseOn,
---         caseBody
---       }
-
--- pReturn :: Parser Stmt
--- pReturn = do
---   _ <- pSpaces $ string "return"
---   tm <- pSpaces pTm
---   pure $ Return tm
-
--- pAssign :: Parser Stmt
--- pAssign = do
---   var <- pSpaces pLowerString
---   _ <- pSpaces $ char '='
---   rhs <- pSpaces pTm
---   pure $ Assign var rhs
-
--- pDecl :: Parser Stmt
--- pDecl = do
---   ty <- pSpaces pTy
---   var <- pSpaces pLowerString
---   pure $ Decl ty var
-
--- pDeclAssign :: Parser Stmt
--- pDeclAssign = do
---   ty <- pSpaces pTy
---   var <- pSpaces pLowerString
---   _ <- pSpaces $ char '='
---   rhs <- pSpaces pTm
---   pure $ DeclAssign ty var rhs
-
--- pFunctionCall :: Parser Tm
--- pFunctionCall = do
---   name <- pSpaces pLowerString
---   _ <- pSpaces $ char '('
---   args <- pSpaces pTm `sepBy` char ','
---   _ <- pSpaces $ char ')'
---   pure $ TmFunctionCall name args
-
--- pConTm :: Parser Tm
--- pConTm = do
---   name <- pSpaces pUpperString
---   _ <- pSpaces $ char '('
---   args <- pSpaces pTm `sepBy` char ','
---   _ <- pSpaces $ char ')'
---   pure $ TmCon name args
-
--- pWhile :: Parser Stmt
--- pWhile = do
---   _ <- pSpaces $ string "while"
---   _ <- pSpaces $ char '('
---   condition <- pSpaces pTm
---   _ <- pSpaces $ char ')'
---   _ <- pSpaces $ char '{'
---   body <- many $ pSpaces pStmt
---   _ <- pSpaces $ char '}'
---   pure $
---     While
---       { condition,
---         body
---       }
-
--- pIf :: Parser Stmt
--- pIf = do
---   _ <- pSpaces $ string "if"
---   _ <- pSpaces $ char '('
---   cond <- pSpaces pTm
---   _ <- pSpaces $ char ')'
---   _ <- pSpaces $ char '{'
---   thenCase <- many $ pSpaces pStmt
---   _ <- pSpaces $ char '}'
---   _ <- pSpaces $ string "else"
---   _ <- pSpaces $ char '{'
---   elseCase <- many $ pSpaces pStmt
---   _ <- pSpaces $ char '}'
---   pure $
---     If
---       { cond,
---         thenCase,
---         elseCase
---       }
 
 -- -- parsing utils
 parseFromFile p file = runParser p file <$> readFile file
