@@ -8,7 +8,7 @@ import Data.Tuple (swap)
 import Data.Void (Void)
 import GHC.TypeLits (Nat)
 import Lib
-import Text.Megaparsec (MonadParsec (eof, try), Parsec, many, parse, runParser, sepBy, some, (<|>))
+import Text.Megaparsec (MonadParsec (eof, try), Parsec, many, parse, runParser, sepBy, some, (<|>), sepBy1)
 import Text.Megaparsec.Char
 import ToIdris
 import Types
@@ -92,12 +92,12 @@ pFunc :: Parser Func
 pFunc = do
   _ <- pSpaces $ string "func"
   funcName <- pSpaces pLowerStr
-  impArgs <- try $ pSpaces pImplicit
-  expArgs <- pSpaces $ pParens pFuncArgs
+  impArgs <-  pSpaces (try pImplicit <|> pure [])
+  expArgs <- pSpaces $ pParens (try pFuncArgs <|> pure [])
   let funcArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   _ <- pSpaces $ string "of"
   funcRetTy <- pSpaces pTy
-  funcBody <- pSpaces $ pCurlies pTm
+  funcBody <- pSpaces $ pCurlies (try pTm <|> pure TmUnit)
   pure $
     Func
       { funcName,
@@ -117,11 +117,11 @@ pImplicit = do
 pFuncArgs :: Parser (List (Ty, String))
 pFuncArgs =
   pSpaces
-    ( ( (,)
+    ( ( try $ (,)
           <$> pSpaces pTy
           <*> pSpaces pVar
       )
-        `sepBy` char ','
+        `sepBy1` char ','
     )
     <|> pure []
 
@@ -231,7 +231,9 @@ pAssign = do
 
 pDeclAssign :: Parser Stmt
 pDeclAssign = do
-  ty <- pSpaces pTy
+  _ <- pSpaces $ string "let"
+  ty <- pSpaces pTy -- this is reachable from pTm which is reachable from pTy
+  -- add syntax in front of decl to remove LR
   var <- pSpaces pLowerStr
   _ <- pSpaces $ char '='
   rhs <- pSpaces pTm1
@@ -271,13 +273,13 @@ pTmCon = do
 pTmBlock :: Parser Tm
 pTmBlock = do
   stmts <- pSpaces $ many pStmt
-  tm <- pSpaces pTm1
+  tm <- pSpaces pTm
   pure $ TmBlock stmts tm
 
 pTmReturn :: Parser Tm
 pTmReturn = do
   _ <- pSpaces $ string "return"
-  tm <- pSpaces pTm
+  tm <- pSpaces pTm1
   _ <- pSpaces $ char ';'
   pure $ TmReturn tm
 
@@ -364,15 +366,18 @@ pTy =
     <|> try pTyTm
 
 pTm :: Parser Tm
-pTm = try pPlusTm <|> try pFuncCall <|> try pTmCon <|> pTm1
+pTm = try pPlusTm 
+  <|> try pTmReturn 
+  <|> try pFuncCall
+  <|> try pTmCon 
+  <|> try pTmBlock 
+  <|> try pTm1
 
 pTm1 :: Parser Tm 
-pTm1 = try pTmBlock  
-  <|> try (pParens pTm) 
+pTm1 = try (pParens pTm) 
   <|> try pTmVar 
   <|> pNat 
   <|> pBool
-  <|> pTmReturn 
 
 -- -- parsing utils
 parseFromFile p file = runParser p file <$> readFile file
