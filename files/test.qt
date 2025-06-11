@@ -1,4 +1,21 @@
-func append<Nat n, Nat m, Ty T> (Vect<T>(n) v1, Vect<T>(m) v2) of Vect<T>(n+m) {
-    let Nat x = 5;
-    return x;
+type Vect<Ty T>(Nat n) {
+    constructor Nil<>() of Vect<T>(0);
+    constructor Cons<>(T head, Vect<T>(n) tail) of Vect<T>(n+1);
 }
+type Pair<Ty T>(Func(T a => Ty) P) {
+    constructor MkPair (T a, P snd) of Pair<T>(p);
+}
+
+record Pair<Ty T> (Func(T a => Ty) p) {
+    T fst; 
+    p(fst) snd;
+}
+
+func append<Nat n, Nat m, Ty T> (Vect<T>(n) v1, Vect<T>(m) v2) of Vect<T>(n+m) {
+    let Nat x = 5; 
+    return x; 
+}
+
+
+func test<>() of Void {}
+

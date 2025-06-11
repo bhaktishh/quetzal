@@ -4,38 +4,34 @@ module ToIdris where
 
 import Data.Char (toLower)
 import Data.List (intersperse)
-import FirstTypes
+import Types
 
 uProg :: Prog -> String
-uProg Prog {types, funcs} =
-  concatMap uTypes types ++ concatMap uFuncs funcs
+uProg [] = ""
+uProg (x:xs) = case x of
+  PDecl decl -> uTypes decl ++ uProg xs
+  PFunc func -> uFuncs func ++ uProg xs 
 
 uFuncs :: Func -> String
 uFuncs
   Func
     { funcName,
-      funcRetType,
-      funcErasedArgs,
+      funcRetTy,
       funcArgs,
       funcBody
     } =
     funcName
       ++ " : "
-      ++ concatMap uTyDeclParam funcErasedArgs
-      ++ concatMap uTyDeclParam funcArgs
-      ++ uTy funcRetType
+      ++ concatMap uAnnParam funcArgs
+      ++ uTy funcRetTy
       ++ "\n"
       ++ funcName
       ++ " "
-      ++ unwords (map (map toLower . snd) funcErasedArgs)
-      ++ " "
-      ++ unwords (map (map toLower . snd) funcArgs)
+      ++ unwords (map (\(AnnParam (_, v) _) -> map toLower v) funcArgs)
       ++ " = "
-      ++ uFuncBody funcBody
+      ++ uTm funcBody
+      ++ "\n"
 
-uFuncBody :: Maybe ([Stmt], Stmt) -> String
-uFuncBody Nothing = ""
-uFuncBody (Just (xs, x)) = unwords (map uStmt xs) ++ uStmt x
 
 uTypes :: Decl -> String
 uTypes (Ty tdecl) = uTyDecl tdecl
@@ -45,7 +41,6 @@ uTyDecl :: TyDecl -> String
 uTyDecl
   TyDecl
     { tyDeclName,
-      tyDeclErasedParams,
       tyDeclParams,
       tyDeclConstructors
     } =
@@ -53,30 +48,32 @@ uTyDecl
       ++ " "
       ++ tyDeclName
       ++ " : "
-      ++ concatMap uTyDeclParam tyDeclErasedParams
-      ++ concatMap uTyDeclParam tyDeclParams
+      ++ concatMap uAnnParam tyDeclParams
       ++ "Type where \n"
       ++ concatMap uTyDeclConstructor tyDeclConstructors
       ++ "\n"
 
 uTyDeclConstructor :: Constructor -> String
-uTyDeclConstructor Constructor {conName, conErasedArgs, conArgs, conTy} =
+uTyDeclConstructor Constructor {conName, conArgs, conTy} =
   "\t"
     ++ conName
     ++ " : "
-    ++ concatMap uTyDeclParam conErasedArgs
-    ++ concatMap uTyDeclParam conArgs
+    ++ concatMap uAnnParam conArgs
     ++ uTy conTy
     ++ "\n"
+
+uAnnParam :: AnnParam -> String
+uAnnParam (AnnParam (ty, var) vis) = "(" ++ map toLower var ++ " : " ++ uTy ty ++ ")" ++ " -> "
 
 uTyDeclParam :: (Ty, String) -> String
 uTyDeclParam (ty, var) = "(" ++ map toLower var ++ " : " ++ uTy ty ++ ")" ++ " -> "
 
+
+-- TODO 
 uRecDecl :: RecDecl -> String
 uRecDecl
   RecDecl
     { recDeclName,
-      recDeclErasedParams,
       recDeclParams,
       recDeclFields
     } =
@@ -84,9 +81,8 @@ uRecDecl
       ++ " "
       ++ recDeclName
       ++ " "
-      ++ concatMap uTyDeclParam recDeclErasedParams
-      ++ concatMap uTyDeclParam recDeclParams
       ++ "where \n"
+      ++ concatMap uAnnParam recDeclParams
       ++ "\tconstructor Mk"
       ++ recDeclName
       ++ "\n"
@@ -100,27 +96,28 @@ uTy :: Ty -> String
 uTy TyNat = "Nat"
 uTy TyBool = "Bool"
 uTy TyTy = "Type"
-uTy TyVoid = "()"
-uTy (TyVar s) = map toLower s
-uTy (TyFunctionCall f args) = f ++ " " ++ unwords (map uTm args)
-uTy (TyCustom {tyName, tyErasedParams, tyParams}) = tyName ++ " " ++ unwords (map uTm tyErasedParams) ++ " " ++ unwords (map uTm tyParams)
+uTy TyUnit = "()"
+uTy (TyCustom {tyName, tyParams}) = tyName ++ " " ++ unwords (map uTm tyParams)
 uTy (TyFunc {tyFuncArgs, tyFuncRetTy}) = "(" ++ concatMap uTyDeclParam tyFuncArgs ++ uTy tyFuncRetTy ++ ")"
+uTy (TyTm t) = uTm t
 
 uTm :: Tm -> String
 uTm (TmNat n) = show n
 uTm (TmBool b) = show b
 uTm (TmPlus n1 n2) = "(" ++ uTm n1 ++ " + " ++ uTm n2 ++ ")"
 uTm (TmVar v) = v
-uTm (TmTyVar v) = map toLower v
-uTm (TmFunctionCall f args) = f ++ " " ++ unwords (map uTm args)
+uTm (TmFuncCall f args) = uTm f ++ " " ++ unwords (map uTm args)
 uTm (TmCon c args) = c ++ " " ++ unwords (map uTm args)
+uTm (TmReturn tm) = uTm tm
+uTm (TmSwitch {switchOn, cases}) = error "TODO"
+uTm (TmIf cond thenCase elseCase) = error "TODO"
+uTm TmUnit = "()"
+uTm (TmTy t) = uTy t
+uTm (TmFunc f) = uFuncs f 
+uTm (TmBlock stmts tm) = concatMap uStmt stmts ++ uTm tm 
+
 
 uStmt :: Stmt -> String
 uStmt (Assign v tm) = "let " ++ v ++ " = " ++ uTm tm ++ " in\n\t"
-uStmt (Decl ty str) = error "TODO"
 uStmt (DeclAssign ty v tm) = "let " ++ v ++ " : " ++ uTy ty ++ " = " ++ uTm tm ++ " in\n\t"
-uStmt (Return tm) = uTm tm
-uStmt Blank = "\n"
-uStmt (Switch {switchOn, cases}) = error "TODO"
-uStmt (If {cond, thenCase, elseCase}) = error "TODO"
 uStmt _ = error "should have been transformed bruh"

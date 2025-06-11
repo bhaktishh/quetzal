@@ -221,7 +221,7 @@ pAssign :: Parser Stmt
 pAssign = do
   var <- pSpaces pLowerStr
   _ <- pSpaces $ char '='
-  rhs <- pSpaces pTm1
+  rhs <- pSpaces pTm
   _ <- pSpaces $ char ';'
   pure $ Assign var rhs
 
@@ -263,7 +263,7 @@ pPlusTm = do
 pTmCon :: Parser Tm
 pTmCon = do
   name <- pSpaces pUpperStr
-  args <- pSpaces $ pParens $ pTm `sepBy` char ','
+  args <- pSpaces $ try (pParens $ pTm `sepBy` char ',') <|> pure []
   pure $ TmCon name args
 
 pTmBlock :: Parser Tm
@@ -275,7 +275,7 @@ pTmBlock = do
 pTmReturn :: Parser Tm
 pTmReturn = do
   _ <- pSpaces $ string "return"
-  tm <- pSpaces pTm1
+  tm <- pSpaces pTm
   _ <- pSpaces $ char ';'
   pure $ TmReturn tm
 
@@ -366,6 +366,7 @@ pTm0 = try pPlusTm
   <|> try pTmReturn 
   <|> try pFuncCall
   <|> try pTmCon 
+  <|> try pTmSwitch
   <|> try pTm1
 
 pTm1 :: Parser Tm 
@@ -439,10 +440,13 @@ parseFromFile p file = runParser p file <$> readFile file
 --   Left _ -> error "bruh"
 --   Right tm -> tm {funcs = map doShadowing (funcs tm)}
 
--- processFile :: String -> IO Prog
--- processFile file = do
---   x <- readFile file
---   pure $ process x
+processFile :: String -> IO Prog
+processFile file = do
+  x <- readFile file
+  case parse pProg "" x of
+    Left _ -> error "wtf"
+    Right tm -> pure tm
 
--- writeIdris :: Prog -> String -> IO ()
--- writeIdris p fpath = writeFile fpath (uProg p)
+
+writeIdris :: Prog -> String -> IO ()
+writeIdris p fpath = writeFile fpath (uProg p)
