@@ -123,7 +123,7 @@ pFuncArgs =
     <|> pure []
 
 pVarStr :: Parser String
-pVarStr = (:) <$> letterChar <*> many alphaNumChar
+pVarStr = (:) <$> letterChar <*> many (alphaNumChar <|> char '_')
 
 pVar :: Parser String
 pVar = try $ do
@@ -241,7 +241,7 @@ pWhile :: Parser Stmt
 pWhile = do
   _ <- pSpaces $ string "while"
   condition <- pSpaces $ pParens pTm
-  body <- pSpaces $ pCurlies pTm
+  body <- pSpaces $ pCurlies $ many pStmt
   pure $
     While
       { condition,
@@ -438,8 +438,50 @@ doStmts vars (x : xs) = case x of
 --     return foo_recursion(params, modified_header_vars)
 -- }
 -- -}
--- unLoop :: Func -> List Func
--- unLoop f = undefined
+
+-- may have to parse to a second data type because of the differences
+
+unLoopF :: Func -> List Tm 
+unLoopF = undefined 
+
+unLoop :: Tm -> Tm
+unLoop (TmFunc f) = 
+  let whrDecs = unLoopF f
+  in undefined
+
+getHVars :: List Stmt -> List (Ty, String)
+getHVars stmts = [] -- todo 
+
+defOuter :: List Stmt -> String -> List AnnParam -> Ty -> Func 
+defOuter hdr fname params ty = 
+  let funcName = fname ++ "_reco"
+      funcInner = fname ++ "_reci"
+      hvars = map (`AnnParam` True) $ getHVars hdr 
+    in 
+      Func { 
+        funcName = funcName, 
+        funcArgs = params, 
+        funcRetTy = ty, 
+        funcBody = TmBlock hdr (TmFuncCall (TmVar funcInner) (map (TmVar . getAnnParamVar) (params ++ hvars)))
+      }
+
+defInner :: Tm -> Tm -> List Stmt -> String -> List AnnParam -> List (Ty, String) -> Ty -> Func
+defInner condition tl body fname params vars retty = 
+  let funcName = fname ++ "_reci" 
+      hvars = map (`AnnParam` True) vars
+    in
+    Func {
+    funcName = funcName,
+    funcArgs = params ++ hvars, 
+    funcRetTy = retty, 
+    funcBody = TmIf (TmNot condition) (TmReturn tl) (TmBlock body (TmFuncCall (TmVar funcName) (map (TmVar . getAnnParamVar) (params ++ hvars))))
+  }
+
+getAnnParamVar :: AnnParam -> String 
+getAnnParamVar (AnnParam (_, str) _) = str
+
+getAnnParamTy :: AnnParam -> Ty 
+getAnnParamTy (AnnParam (ty, _) _) = ty
 
 -- unSwitch :: Func -> Func
 -- unSwitch f = undefined

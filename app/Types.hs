@@ -30,6 +30,7 @@ data Tm
   | TmPlus Tm Tm
   | TmBool Bool
   | TmUnit
+  | TmNot Tm 
   | TmTy Ty
   | TmVar String
   | TmCon String (List Tm)
@@ -58,7 +59,7 @@ data Stmt
   | Assign String Tm
   | While
       { condition :: Tm,
-        body :: Tm
+        body :: List Stmt 
       }
   deriving (Show, Eq)
 

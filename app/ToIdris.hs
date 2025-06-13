@@ -164,6 +164,9 @@ uTm (TmBlock stmts tm) = do
   stmts <- mapM uStmt stmts
   tm <- uTm tm
   pure $ indent t ind ++ concat stmts ++ tm
+uTm (TmNot tm) = do 
+  t <- uTm tm
+  pure $ "not " ++ t
 
 uStmt :: Stmt -> Indent String
 uStmt (Assign v tm) = do

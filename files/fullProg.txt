@@ -37,3 +37,11 @@ func replicate<Ty t>(t x, Nat n) of Vect(t, n) {
     }
 }
 
+func test(Nat x) of Void { 
+    if (x < 5) {
+        x = 5;
+    } else {
+        Nat y = 10;
+    }
+}
+
