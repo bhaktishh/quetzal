@@ -2,13 +2,14 @@
 
 module Main where
 
+import Control.Monad.State (evalState, execState, runState)
 import Data.List (unsnoc)
 import qualified Data.Map as M
 import Data.Tuple (swap)
 import Data.Void (Void)
 import GHC.TypeLits (Nat)
 import Lib
-import Text.Megaparsec (MonadParsec (eof, try), Parsec, many, parse, runParser, sepBy, some, (<|>), sepBy1, sepEndBy1)
+import Text.Megaparsec (MonadParsec (eof, try), Parsec, many, parse, runParser, sepBy, sepBy1, sepEndBy1, some, (<|>))
 import Text.Megaparsec.Char
 import ToIdris
 import Types
@@ -82,18 +83,18 @@ tmParse str = case parse pProg "" str of
 pTLDecl :: Parser Decl
 pTLDecl = (Ty <$> pTyDecl) <|> (Rec <$> pRecDecl)
 
-pProgEl :: Parser ProgEl 
-pProgEl = pSpaces ((PDecl <$> pTLDecl) <|> (PFunc <$> pFunc)) 
+pProgEl :: Parser ProgEl
+pProgEl = pSpaces ((PDecl <$> pTLDecl) <|> (PFunc <$> pFunc))
 
-pProg :: Parser Prog 
+pProg :: Parser Prog
 pProg = many (pSpaces pProgEl) <* eof
 
 pFunc :: Parser Func
 pFunc = do
   _ <- pSpaces $ string "func"
   funcName <- pSpaces pLowerStr
-  impArgs <-  try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> try (pSpaces (pAngles pFuncArgs)) <|> pure []
-  expArgs <-  try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs)
+  impArgs <- try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> try (pSpaces (pAngles pFuncArgs)) <|> pure []
+  expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs)
   let funcArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   _ <- pSpaces $ string "of"
   funcRetTy <- pSpaces pTy
@@ -109,16 +110,16 @@ pFunc = do
 mkAnnParam :: Bool -> (Ty, String) -> AnnParam
 mkAnnParam b x = AnnParam x b
 
--- if this tries to parse an empty string it loops, probably because it calls pTy and keeps going 
+-- if this tries to parse an empty string it loops, probably because it calls pTy and keeps going
 pFuncArgs :: Parser (List (Ty, String))
 pFuncArgs =
   pSpaces
-      ( try $ (,)
+    ( try $
+        (,)
           <$> pSpaces pTy
           <*> pSpaces pVar
-      )
-        `sepBy` char ','
-    
+    )
+    `sepBy` char ','
     <|> pure []
 
 pVarStr :: Parser String
@@ -232,7 +233,7 @@ pDeclAssign = do
   -- add syntax in front of decl to remove LR
   var <- pSpaces pLowerStr
   _ <- pSpaces $ char '='
-  rhs <- pSpaces pTm1
+  rhs <- pSpaces pTm0
   _ <- pSpaces $ char ';'
   pure $ DeclAssign ty var rhs
 
@@ -248,10 +249,11 @@ pWhile = do
       }
 
 pStmt :: Parser Stmt
-pStmt = 
-  try pDeclAssign 
-  <|> try pAssign
-  -- <|> try pWhile
+pStmt =
+  try pDeclAssign
+    <|> try pAssign
+
+-- <|> try pWhile
 
 pPlusTm :: Parser Tm
 pPlusTm = do
@@ -303,10 +305,11 @@ pTmSwitch = do
   switchOn <- pSpaces $ pParens $ pTm `sepBy` char ','
   cases <- pSpaces $ pCurlies $ many pCase
   pure $
-    TmSwitch
-      { switchOn,
-        cases
-      }
+    TmSwitch $
+      Switch
+        { switchOn,
+          cases
+        }
 
 pCase :: Parser Case
 pCase = do
@@ -362,18 +365,20 @@ pTy =
     <|> try pTyTm
 
 pTm0 :: Parser Tm
-pTm0 = try pPlusTm 
-  <|> try pTmReturn 
-  <|> try pFuncCall
-  <|> try pTmCon 
-  <|> try pTmSwitch
-  <|> try pTm1
+pTm0 =
+  try pPlusTm
+    <|> try pTmReturn
+    <|> try pFuncCall
+    <|> try pTmCon
+    <|> try pTmSwitch
+    <|> try pTm1
 
-pTm1 :: Parser Tm 
-pTm1 = try (pParens pTm) 
-  <|> try pTmVar 
-  <|> pNat 
-  <|> pBool
+pTm1 :: Parser Tm
+pTm1 =
+  try (pParens pTm)
+    <|> try pTmVar
+    <|> pNat
+    <|> pBool
 
 pTm :: Parser Tm
 pTm = try pTmBlock <|> try pTm0
@@ -385,26 +390,30 @@ parseFromFile p file = runParser p file <$> readFile file
 -- combine Nothing = []
 -- combine (Just (xs, x)) = xs ++ [x]
 
--- doShadowing :: Func -> Func
--- doShadowing f =
---   let stmts = funcBody f
---    in f {funcBody = unsnoc $ doStmts (M.fromList (map swap (funcArgs f))) (combine stmts)}
+doShadowing :: Func -> Func
+doShadowing f =
+  let tm = funcBody f
+   in f {funcBody = doTms (M.fromList (map (\(AnnParam (t, v) _) -> (v, t) ) (funcArgs f))) tm}
 
--- doStmts :: M.Map String Ty -> List Stmt -> List Stmt
--- doStmts _ [] = []
--- doStmts vars (x : xs) = case x of
---   Assign var tm -> case M.lookup var vars of
---     Nothing -> error "assign before declare"
---     Just ty -> DeclAssign ty var tm : doStmts vars xs
---   Decl ty var -> Decl ty var : doStmts (M.insert var ty vars) xs
---   DeclAssign ty var tm -> DeclAssign ty var tm : doStmts (M.insert var ty vars) xs
---   Switch {switchOn, cases} ->
---     Switch
---       { switchOn,
---         cases = map (\y -> y {caseBody = doStmts vars (caseBody y)}) cases
---       }
---       : doStmts vars xs
---   _ -> x : doStmts vars xs
+doTms :: M.Map String Ty -> Tm -> Tm 
+doTms m (TmBlock stmts tm) = TmBlock (doStmts m stmts) tm
+doTms m (TmPlus t1 t2) = TmPlus (doTms m t1) (doTms m t2)
+doTms m (TmCon v tms) = TmCon v (map (doTms m) tms)
+doTms m (TmFunc f) = TmFunc f { funcBody = doTms m (funcBody f) }
+doTms m (TmFuncCall t ts) = TmFuncCall (doTms m t) (map (doTms m) ts)
+doTms m (TmIf t1 t2 t3) = TmIf (doTms m t1) (doTms m t2) (doTms m t3)
+doTms m (TmReturn t) = TmReturn (doTms m t)
+doTms m (TmSwitch s) = TmSwitch s {switchOn = map (doTms m) (switchOn s), cases = map (\c -> Case {caseOn = map (doTms m) (caseOn c), caseBody = doTms m (caseBody c)}) (cases s)}
+doTms _ tm = tm 
+
+doStmts :: M.Map String Ty -> List Stmt -> List Stmt
+doStmts _ [] = []
+doStmts vars (x : xs) = case x of
+  Assign var tm -> case M.lookup var vars of
+    Nothing -> error "assign before declare"
+    Just ty -> DeclAssign ty var tm : doStmts vars xs
+  DeclAssign ty var tm -> DeclAssign ty var tm : doStmts (M.insert var ty vars) xs
+  _ -> x : doStmts vars xs
 
 -- {-
 -- foo_iterative(params){
@@ -445,8 +454,7 @@ processFile file = do
   x <- readFile file
   case parse pProg "" x of
     Left _ -> error "wtf"
-    Right tm -> pure tm
-
+    Right tm -> pure tm 
 
 writeIdris :: Prog -> String -> IO ()
-writeIdris p fpath = writeFile fpath (uProg p)
+writeIdris p fpath = writeFile fpath (evalState (uProg p) (0, False))

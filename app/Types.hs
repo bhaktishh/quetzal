@@ -38,10 +38,13 @@ data Tm
   | TmBlock (List Stmt) Tm
   | TmIf Tm Tm Tm
   | TmReturn Tm
-  | TmSwitch
-      { switchOn :: List Tm,
-        cases :: List Case
-      }
+  | TmSwitch Switch
+  deriving (Show, Eq)
+
+data Switch = Switch
+  { switchOn :: List Tm,
+    cases :: List Case
+  }
   deriving (Show, Eq)
 
 data Case = Case
