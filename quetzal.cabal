@@ -44,10 +44,10 @@ library
 executable quetzal-exe
   main-is: Main.hs
   other-modules:
-      FirstTypes
+      ITypes
+      PTypes
       SSA
       ToIdris
-      Types
       Paths_quetzal
   autogen-modules:
       Paths_quetzal

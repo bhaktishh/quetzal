@@ -9,10 +9,10 @@ import Data.Tuple (swap)
 import Data.Void (Void)
 import GHC.TypeLits (Nat)
 import Lib
+import PTypes
 import Text.Megaparsec (MonadParsec (eof, try), Parsec, many, parse, runParser, sepBy, sepBy1, sepEndBy1, some, (<|>))
 import Text.Megaparsec.Char
 import ToIdris
-import Types
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
 -- is there a way i can add a list of variables and types to carry around? or should that be a second pass
@@ -81,7 +81,7 @@ tmParse str = case parse pProg "" str of
   Right tm -> tm
 
 pTLDecl :: Parser Decl
-pTLDecl = (Ty <$> pTyDecl) <|> (Rec <$> pRecDecl)
+pTLDecl = (PTy <$> pTyDecl) <|> (Rec <$> pRecDecl)
 
 pProgEl :: Parser ProgEl
 pProgEl = pSpaces ((PDecl <$> pTLDecl) <|> (PFunc <$> pFunc))
@@ -97,26 +97,26 @@ pFunc = do
   expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs)
   let funcArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   _ <- pSpaces $ string "of"
-  funcRetTy <- pSpaces pTy
-  funcBody <- pSpaces $ pCurlies (try pTm <|> pure TmUnit)
+  funcRetPTy <- pSpaces pPTy
+  funcBody <- pSpaces $ pCurlies (try pPTm <|> pure PTmUnit)
   pure $
     Func
       { funcName,
         funcArgs,
-        funcRetTy,
+        funcRetPTy,
         funcBody
       }
 
-mkAnnParam :: Bool -> (Ty, String) -> AnnParam
+mkAnnParam :: Bool -> (PTy, String) -> AnnParam
 mkAnnParam b x = AnnParam x b
 
--- if this tries to parse an empty string it loops, probably because it calls pTy and keeps going
-pFuncArgs :: Parser (List (Ty, String))
+-- if this tries to parse an empty string it loops, probably because it calls pPTy and keeps going
+pFuncArgs :: Parser (List (PTy, String))
 pFuncArgs =
   pSpaces
     ( try $
         (,)
-          <$> pSpaces pTy
+          <$> pSpaces pPTy
           <*> pSpaces pVar
     )
     `sepBy` char ','
@@ -161,13 +161,13 @@ pTyDeclConstructor = do
   expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs) <|> pure []
   let conArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   _ <- pSpaces $ string "of"
-  conTy <- pSpaces pTy
+  conPTy <- pSpaces pPTy
   _ <- pSpaces $ char ';'
   pure $
     Constructor
       { conName,
         conArgs,
-        conTy
+        conPTy
       }
 
 pRecDecl :: Parser RecDecl
@@ -185,62 +185,62 @@ pRecDecl = do
         recDeclFields
       }
 
-pRecDeclField :: Parser (Ty, String)
+pRecDeclField :: Parser (PTy, String)
 pRecDeclField = do
-  ty <- pSpaces pTy
+  ty <- pSpaces pPTy
   var <- pSpaces pVar
   _ <- pSpaces $ char ';'
   pure (ty, var)
 
-pTyBool :: Parser Ty
-pTyBool = string "Bool" >> pure TyBool
+pPTyBool :: Parser PTy
+pPTyBool = string "Bool" >> pure PTyBool
 
-pBool :: Parser Tm
+pBool :: Parser PTm
 pBool = pTrue <|> pFalse
 
-pTrue :: Parser Tm
-pTrue = string "True" >> pure (TmBool True)
+pTrue :: Parser PTm
+pTrue = string "True" >> pure (PTmBool True)
 
-pFalse :: Parser Tm
-pFalse = string "False" >> pure (TmBool False)
+pFalse :: Parser PTm
+pFalse = string "False" >> pure (PTmBool False)
 
-pNat :: Parser Tm
+pNat :: Parser PTm
 pNat = do
   nums <- some digitChar
-  pure $ TmNat ((read :: String -> Nat) nums)
+  pure $ PTmNat ((read :: String -> Nat) nums)
 
-pTyNat :: Parser Ty
-pTyNat = string "Nat" >> pure TyNat
+pPTyNat :: Parser PTy
+pPTyNat = string "Nat" >> pure PTyNat
 
-pTyTy :: Parser Ty
-pTyTy = string "Ty" >> pure TyTy
+pPTyPTy :: Parser PTy
+pPTyPTy = string "PTy" >> pure PTyPTy
 
-pTyUnit :: Parser Ty
-pTyUnit = string "Void" >> pure TyUnit
+pPTyUnit :: Parser PTy
+pPTyUnit = string "Void" >> pure PTyUnit
 
 pAssign :: Parser Stmt
 pAssign = do
   var <- pSpaces pLowerStr
   _ <- pSpaces $ char '='
-  rhs <- pSpaces pTm
+  rhs <- pSpaces pPTm
   _ <- pSpaces $ char ';'
   pure $ Assign var rhs
 
 pDeclAssign :: Parser Stmt
 pDeclAssign = do
   _ <- pSpaces $ string "let"
-  ty <- pSpaces pTy -- this is reachable from pTm which is reachable from pTy
+  ty <- pSpaces pPTy -- this is reachable from pPTm which is reachable from pPTy
   -- add syntax in front of decl to remove LR
   var <- pSpaces pLowerStr
   _ <- pSpaces $ char '='
-  rhs <- pSpaces pTm0
+  rhs <- pSpaces pPTm0
   _ <- pSpaces $ char ';'
   pure $ DeclAssign ty var rhs
 
 pWhile :: Parser Stmt
 pWhile = do
   _ <- pSpaces $ string "while"
-  condition <- pSpaces $ pParens pTm
+  condition <- pSpaces $ pParens pPTm
   body <- pSpaces $ pCurlies $ many pStmt
   pure $
     While
@@ -255,57 +255,57 @@ pStmt =
 
 -- <|> try pWhile
 
-pPlusTm :: Parser Tm
-pPlusTm = do
-  x <- pSpaces pTm1
+pPlusPTm :: Parser PTm
+pPlusPTm = do
+  x <- pSpaces pPTm1
   _ <- pSpaces $ char '+'
-  y <- pSpaces pTm
-  pure $ TmPlus x y
+  y <- pSpaces pPTm
+  pure $ PTmPlus x y
 
-pTmCon :: Parser Tm
-pTmCon = do
+pPTmCon :: Parser PTm
+pPTmCon = do
   name <- pSpaces pUpperStr
-  args <- pSpaces $ try (pParens $ pTm `sepBy` char ',') <|> pure []
-  pure $ TmCon name args
+  args <- pSpaces $ try (pParens $ pPTm `sepBy` char ',') <|> pure []
+  pure $ PTmCon name args
 
-pTmBlock :: Parser Tm
-pTmBlock = do
+pPTmBlock :: Parser PTm
+pPTmBlock = do
   stmts <- pSpaces $ many pStmt
-  tm <- pSpaces pTm0
-  pure $ TmBlock stmts tm
+  tm <- pSpaces pPTm0
+  pure $ PTmBlock stmts tm
 
-pTmReturn :: Parser Tm
-pTmReturn = do
+pPTmReturn :: Parser PTm
+pPTmReturn = do
   _ <- pSpaces $ string "return"
-  tm <- pSpaces pTm
+  tm <- pSpaces pPTm
   _ <- pSpaces $ char ';'
-  pure $ TmReturn tm
+  pure $ PTmReturn tm
 
-pTmVar :: Parser Tm
-pTmVar = TmVar <$> pVar
+pPTmVar :: Parser PTm
+pPTmVar = PTmVar <$> pVar
 
-pFuncCall :: Parser Tm
+pFuncCall :: Parser PTm
 pFuncCall = do
-  name <- pSpaces pTm1
-  args <- pSpaces $ pParens $ (pSpaces pTm1 `sepBy` char ',') <|> pure []
-  pure $ TmFuncCall name args
+  name <- pSpaces pPTm1
+  args <- pSpaces $ pParens $ (pSpaces pPTm1 `sepBy` char ',') <|> pure []
+  pure $ PTmFuncCall name args
 
-pIf :: Parser Tm
+pIf :: Parser PTm
 pIf = do
   _ <- pSpaces $ string "if"
-  cond <- pSpaces $ pParens pTm
-  t <- pSpaces $ pCurlies pTm
+  cond <- pSpaces $ pParens pPTm
+  t <- pSpaces $ pCurlies pPTm
   _ <- pSpaces $ string "else"
-  e <- pSpaces $ pCurlies pTm
-  pure $ TmIf cond t e
+  e <- pSpaces $ pCurlies pPTm
+  pure $ PTmIf cond t e
 
-pTmSwitch :: Parser Tm
-pTmSwitch = do
+pPTmSwitch :: Parser PTm
+pPTmSwitch = do
   _ <- pSpaces $ string "switch"
-  switchOn <- pSpaces $ pParens $ pTm `sepBy` char ','
+  switchOn <- pSpaces $ pParens $ pPTm `sepBy` char ','
   cases <- pSpaces $ pCurlies $ many pCase
   pure $
-    TmSwitch $
+    PTmSwitch $
       Switch
         { switchOn,
           cases
@@ -314,74 +314,74 @@ pTmSwitch = do
 pCase :: Parser Case
 pCase = do
   _ <- pSpaces $ string "case"
-  caseOn <- pSpaces $ pParens $ pTm `sepBy` char ','
-  caseBody <- pSpaces $ pCurlies pTm
+  caseOn <- pSpaces $ pParens $ pPTm `sepBy` char ','
+  caseBody <- pSpaces $ pCurlies pPTm
   pure $
     Case
       { caseOn,
         caseBody
       }
 
-pTyTm :: Parser Ty
-pTyTm = TyTm <$> pTm
+pPTyPTm :: Parser PTy
+pPTyPTm = PTyPTm <$> pPTm
 
-pTmTy :: Parser Tm
-pTmTy = TmTy <$> pTy
+pPTmPTy :: Parser PTm
+pPTmPTy = PTmPTy <$> pPTy
 
-pTyCustom :: Parser Ty
-pTyCustom = do
+pPTyCustom :: Parser PTy
+pPTyCustom = do
   tyName <- pSpaces pUpperStr
-  impParams <- try (pSpaces $ pAngles $ pTm `sepBy` char ',') <|> pure []
-  expParams <- try (pSpaces $ pParens $ pTm `sepBy` char ',') <|> pure []
+  impParams <- try (pSpaces $ pAngles $ pPTm `sepBy` char ',') <|> pure []
+  expParams <- try (pSpaces $ pParens $ pPTm `sepBy` char ',') <|> pure []
   let tyParams = impParams ++ expParams
   pure $
-    TyCustom
+    PTyCustom
       { tyName,
         tyParams
       }
 
-pTyFunc :: Parser Ty
-pTyFunc = do
+pPTyFunc :: Parser PTy
+pPTyFunc = do
   _ <- pSpaces $ string "Func"
   _ <- pSpaces $ char '('
   tyFuncArgs <- pFuncArgs
   _ <- pSpaces $ string "=>"
-  tyFuncRetTy <- pSpaces pTy
+  tyFuncRetTy <- pSpaces pPTy
   _ <- pSpaces $ char ')'
   pure $
-    TyFunc
+    PTyFunc
       { tyFuncArgs,
         tyFuncRetTy
       }
 
-pTy :: Parser Ty
-pTy =
-  try pTyBool
-    <|> try pTyNat
-    <|> try pTyTy
-    <|> try pTyUnit
-    <|> try pTyFunc
-    <|> try pTyCustom
-    <|> try pTyTm
+pPTy :: Parser PTy
+pPTy =
+  try pPTyBool
+    <|> try pPTyNat
+    <|> try pPTyPTy
+    <|> try pPTyUnit
+    <|> try pPTyFunc
+    <|> try pPTyCustom
+    <|> try pPTyPTm
 
-pTm0 :: Parser Tm
-pTm0 =
-  try pPlusTm
-    <|> try pTmReturn
+pPTm0 :: Parser PTm
+pPTm0 =
+  try pPlusPTm
+    <|> try pPTmReturn
     <|> try pFuncCall
-    <|> try pTmCon
-    <|> try pTmSwitch
-    <|> try pTm1
+    <|> try pPTmCon
+    <|> try pPTmSwitch
+    <|> try pPTm1
 
-pTm1 :: Parser Tm
-pTm1 =
-  try (pParens pTm)
-    <|> try pTmVar
+pPTm1 :: Parser PTm
+pPTm1 =
+  try (pParens pPTm)
+    <|> try pPTmVar
     <|> pNat
     <|> pBool
 
-pTm :: Parser Tm
-pTm = try pTmBlock <|> try pTm0
+pPTm :: Parser PTm
+pPTm = try pPTmBlock <|> try pPTm0
 
 -- -- parsing utils
 parseFromFile p file = runParser p file <$> readFile file
@@ -393,20 +393,25 @@ parseFromFile p file = runParser p file <$> readFile file
 doShadowing :: Func -> Func
 doShadowing f =
   let tm = funcBody f
-   in f {funcBody = doTms (M.fromList (map (\(AnnParam (t, v) _) -> (v, t) ) (funcArgs f))) tm}
+   in f {funcBody = doPTms (M.fromList (map (\(AnnParam (t, v) _) -> (v, t)) (funcArgs f))) tm}
 
-doTms :: M.Map String Ty -> Tm -> Tm 
-doTms m (TmBlock stmts tm) = TmBlock (doStmts m stmts) tm
-doTms m (TmPlus t1 t2) = TmPlus (doTms m t1) (doTms m t2)
-doTms m (TmCon v tms) = TmCon v (map (doTms m) tms)
-doTms m (TmFunc f) = TmFunc f { funcBody = doTms m (funcBody f) }
-doTms m (TmFuncCall t ts) = TmFuncCall (doTms m t) (map (doTms m) ts)
-doTms m (TmIf t1 t2 t3) = TmIf (doTms m t1) (doTms m t2) (doTms m t3)
-doTms m (TmReturn t) = TmReturn (doTms m t)
-doTms m (TmSwitch s) = TmSwitch s {switchOn = map (doTms m) (switchOn s), cases = map (\c -> Case {caseOn = map (doTms m) (caseOn c), caseBody = doTms m (caseBody c)}) (cases s)}
-doTms _ tm = tm 
+doPTms :: M.Map String PTy -> PTm -> PTm
+doPTms m (PTmBlock stmts tm) = PTmBlock (doStmts m stmts) tm
+doPTms m (PTmPlus t1 t2) = PTmPlus (doPTms m t1) (doPTms m t2)
+doPTms m (PTmCon v tms) = PTmCon v (map (doPTms m) tms)
+doPTms m (PTmFunc f) = PTmFunc f {funcBody = doPTms m (funcBody f)}
+doPTms m (PTmFuncCall t ts) = PTmFuncCall (doPTms m t) (map (doPTms m) ts)
+doPTms m (PTmIf t1 t2 t3) = PTmIf (doPTms m t1) (doPTms m t2) (doPTms m t3)
+doPTms m (PTmReturn t) = PTmReturn (doPTms m t)
+doPTms m (PTmSwitch s) =
+  PTmSwitch
+    s
+      { switchOn = map (doPTms m) (switchOn s),
+        cases = map (\c -> Case {caseOn = map (doPTms m) (caseOn c), caseBody = doPTms m (caseBody c)}) (cases s)
+      }
+doPTms _ tm = tm
 
-doStmts :: M.Map String Ty -> List Stmt -> List Stmt
+doStmts :: M.Map String PTy -> List Stmt -> List Stmt
 doStmts _ [] = []
 doStmts vars (x : xs) = case x of
   Assign var tm -> case M.lookup var vars of
@@ -421,6 +426,7 @@ doStmts vars (x : xs) = case x of
 --     while(condition){
 --         loop_body
 --     }
+--
 --     return tail
 -- }
 
@@ -441,47 +447,45 @@ doStmts vars (x : xs) = case x of
 
 -- may have to parse to a second data type because of the differences
 
-unLoopF :: Func -> List Tm 
-unLoopF = undefined 
+unLoopF :: Func -> List PTm
+unLoopF = undefined
 
-unLoop :: Tm -> Tm
-unLoop (TmFunc f) = 
+unLoop :: PTm -> PTm
+unLoop (PTmFunc f) =
   let whrDecs = unLoopF f
-  in undefined
+   in undefined
 
-getHVars :: List Stmt -> List (Ty, String)
-getHVars stmts = [] -- todo 
+getHVars :: List Stmt -> List (PTy, String)
+getHVars stmts = [] -- todo
 
-defOuter :: List Stmt -> String -> List AnnParam -> Ty -> Func 
-defOuter hdr fname params ty = 
+defOuter :: List Stmt -> String -> List AnnParam -> PTy -> Func
+defOuter hdr fname params ty =
   let funcName = fname ++ "_reco"
       funcInner = fname ++ "_reci"
-      hvars = map (`AnnParam` True) $ getHVars hdr 
-    in 
-      Func { 
-        funcName = funcName, 
-        funcArgs = params, 
-        funcRetTy = ty, 
-        funcBody = TmBlock hdr (TmFuncCall (TmVar funcInner) (map (TmVar . getAnnParamVar) (params ++ hvars)))
-      }
+      hvars = map (`AnnParam` True) $ getHVars hdr
+   in Func
+        { funcName = funcName,
+          funcArgs = params,
+          funcRetPTy = ty,
+          funcBody = PTmBlock hdr (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) (params ++ hvars)))
+        }
 
-defInner :: Tm -> Tm -> List Stmt -> String -> List AnnParam -> List (Ty, String) -> Ty -> Func
-defInner condition tl body fname params vars retty = 
-  let funcName = fname ++ "_reci" 
+defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> List (PTy, String) -> PTy -> Func
+defInner condition tl body fname params vars retty =
+  let funcName = fname ++ "_reci"
       hvars = map (`AnnParam` True) vars
-    in
-    Func {
-    funcName = funcName,
-    funcArgs = params ++ hvars, 
-    funcRetTy = retty, 
-    funcBody = TmIf (TmNot condition) (TmReturn tl) (TmBlock body (TmFuncCall (TmVar funcName) (map (TmVar . getAnnParamVar) (params ++ hvars))))
-  }
+   in Func
+        { funcName = funcName,
+          funcArgs = params ++ hvars,
+          funcRetPTy = retty,
+          funcBody = PTmIf (PTmNot condition) (PTmReturn tl) (PTmBlock body (PTmFuncCall (PTmVar funcName) (map (PTmVar . getAnnParamVar) (params ++ hvars))))
+        }
 
-getAnnParamVar :: AnnParam -> String 
+getAnnParamVar :: AnnParam -> String
 getAnnParamVar (AnnParam (_, str) _) = str
 
-getAnnParamTy :: AnnParam -> Ty 
-getAnnParamTy (AnnParam (ty, _) _) = ty
+getAnnParamPTy :: AnnParam -> PTy
+getAnnParamPTy (AnnParam (ty, _) _) = ty
 
 -- unSwitch :: Func -> Func
 -- unSwitch f = undefined
@@ -496,7 +500,7 @@ processFile file = do
   x <- readFile file
   case parse pProg "" x of
     Left _ -> error "wtf"
-    Right tm -> pure tm 
+    Right tm -> pure tm
 
 writeIdris :: Prog -> String -> IO ()
 writeIdris p fpath = writeFile fpath (evalState (uProg p) (0, False))
