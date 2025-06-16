@@ -25,11 +25,11 @@ uFuncs :: Func -> Indent String
 uFuncs
   Func
     { funcName,
-      funcRetPTy,
+      funcRetTy,
       funcArgs,
       funcBody
     } = do
-    retty <- uPTy funcRetPTy
+    retty <- uPTy funcRetTy
     args <- mapM (uAnnParam True) funcArgs
     body <- uPTm funcBody
     pure $
@@ -67,10 +67,10 @@ uPTyDecl
         ++ concat constructors
 
 uPTyDeclConstructor :: Constructor -> Indent String
-uPTyDeclConstructor Constructor {conName, conArgs, conPTy} =
+uPTyDeclConstructor Constructor {conName, conArgs, conTy} =
   do
     params <- mapM (uAnnParam True) conArgs
-    ty <- uPTy conPTy
+    ty <- uPTy conTy
     pure $
       "\t"
         ++ conName
@@ -119,7 +119,7 @@ uRecDeclField (ty, var) = do
 uPTy :: PTy -> Indent String
 uPTy PTyNat = pure "Nat"
 uPTy PTyBool = pure "Bool"
-uPTy PTyPTy = pure "PType"
+uPTy PTyTy = pure "PType"
 uPTy PTyUnit = pure "()"
 uPTy (PTyCustom {tyName, tyParams}) = do
   params <- mapM uPTm tyParams

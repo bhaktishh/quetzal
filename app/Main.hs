@@ -97,13 +97,13 @@ pFunc = do
   expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs)
   let funcArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   _ <- pSpaces $ string "of"
-  funcRetPTy <- pSpaces pPTy
+  funcRetTy <- pSpaces pPTy
   funcBody <- pSpaces $ pCurlies (try pPTm <|> pure PTmUnit)
   pure $
     Func
       { funcName,
         funcArgs,
-        funcRetPTy,
+        funcRetTy,
         funcBody
       }
 
@@ -161,13 +161,13 @@ pTyDeclConstructor = do
   expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs) <|> pure []
   let conArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   _ <- pSpaces $ string "of"
-  conPTy <- pSpaces pPTy
+  conTy <- pSpaces pPTy
   _ <- pSpaces $ char ';'
   pure $
     Constructor
       { conName,
         conArgs,
-        conPTy
+        conTy
       }
 
 pRecDecl :: Parser RecDecl
@@ -212,8 +212,8 @@ pNat = do
 pPTyNat :: Parser PTy
 pPTyNat = string "Nat" >> pure PTyNat
 
-pPTyPTy :: Parser PTy
-pPTyPTy = string "PTy" >> pure PTyPTy
+pPTyTy :: Parser PTy
+pPTyTy = string "PTy" >> pure PTyTy
 
 pPTyUnit :: Parser PTy
 pPTyUnit = string "Void" >> pure PTyUnit
@@ -358,7 +358,7 @@ pPTy :: Parser PTy
 pPTy =
   try pPTyBool
     <|> try pPTyNat
-    <|> try pPTyPTy
+    <|> try pPTyTy
     <|> try pPTyUnit
     <|> try pPTyFunc
     <|> try pPTyCustom
@@ -466,7 +466,7 @@ defOuter hdr fname params ty =
    in Func
         { funcName = funcName,
           funcArgs = params,
-          funcRetPTy = ty,
+          funcRetTy = ty,
           funcBody = PTmBlock hdr (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) (params ++ hvars)))
         }
 
@@ -477,7 +477,7 @@ defInner condition tl body fname params vars retty =
    in Func
         { funcName = funcName,
           funcArgs = params ++ hvars,
-          funcRetPTy = retty,
+          funcRetTy = retty,
           funcBody = PTmIf (PTmNot condition) (PTmReturn tl) (PTmBlock body (PTmFuncCall (PTmVar funcName) (map (PTmVar . getAnnParamVar) (params ++ hvars))))
         }
 

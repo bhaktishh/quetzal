@@ -13,7 +13,7 @@ data PTy
   = PTyNat
   | PTyBool
   | PTyUnit
-  | PTyPTy
+  | PTyTy
   | PTyFunc
       { tyFuncArgs :: List (PTy, String),
         tyFuncRetTy :: PTy
@@ -65,7 +65,7 @@ data Stmt
 
 data Func = Func
   { funcName :: String,
-    funcRetPTy :: PTy,
+    funcRetTy :: PTy,
     funcArgs :: List AnnParam,
     funcBody :: PTm
   }
@@ -91,7 +91,7 @@ data RecDecl = RecDecl
 data Constructor = Constructor
   { conName :: String,
     conArgs :: List AnnParam,
-    conPTy :: PTy
+    conTy :: PTy
   }
   deriving (Show, Eq)
 

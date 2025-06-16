@@ -45,9 +45,11 @@ executable quetzal-exe
   main-is: Main.hs
   other-modules:
       ITypes
+      PToI
       PTypes
       SSA
       ToIdris
+      Unparse
       Paths_quetzal
   autogen-modules:
       Paths_quetzal
