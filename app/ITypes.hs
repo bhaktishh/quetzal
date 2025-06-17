@@ -22,7 +22,7 @@ data ITm
   | ITmTy ITy 
   | ITmVar String 
   | ITmCon String (List ITm)
-  | ITmFunc Func (List ITm) -- where clause 
+  | ITmFunc IFunc -- where clause 
   | ITmFuncCall ITm (List ITm)
   | ITmIf ITm ITm ITm 
   | ITmMatch (List ITm) (List (List ITm, ITm))
@@ -65,5 +65,6 @@ data IFunc = IFunc {
   iFuncName :: String, 
   iFuncArgs :: List IAnnParam, 
   iFuncBody :: ITm, 
-  iFuncRetTy :: ITy
+  iFuncRetTy :: ITy, 
+  iWhere :: List ITm
 } deriving (Show, Eq)
