@@ -1,13 +1,13 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
-module Unparse where 
+module Unparse where
 
-import Control.Monad.State.Lazy 
-import ITypes 
+import Control.Monad.State.Lazy
+import ITypes
 
 type Indent a = State (Int, Bool) a
 
-uProg :: IProg -> Indent String 
+uProg :: IProg -> Indent String
 uProg [] = pure ""
 uProg (x : xs) = case x of
   IIDecl decl -> do
@@ -18,9 +18,9 @@ uProg (x : xs) = case x of
     f <- uFuncs func
     pr <- uProg xs
     pure $ f ++ "\n\n" ++ pr
- 
-uTypes :: IDecl -> Indent String 
-uTypes = undefined 
 
-uFuncs :: IFunc -> Indent String 
-uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody} = undefined 
+uTypes :: IDecl -> Indent String
+uTypes = undefined
+
+uFuncs :: IFunc -> Indent String
+uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody} = undefined

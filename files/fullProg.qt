@@ -45,3 +45,13 @@ func test(Nat x) of Void {
     }
 }
 
+func power(Nat x, Nat y) of Nat { 
+    if (y == 0) {
+        return 1; 
+    }
+    while (y > 1) {
+        x = x * x; 
+        y = y - 1; 
+    }
+    return x; 
+}

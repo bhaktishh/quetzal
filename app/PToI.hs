@@ -2,10 +2,9 @@
 
 module PToI where
 
+import qualified Data.Map as M
 import ITypes
 import PTypes
-import qualified Data.Map as M
-
 
 trTm :: PTm -> ITm
 trTm (PTmNat n) = ITmNat n
@@ -33,64 +32,81 @@ trTy PTyCustom {tyName, tyParams} = ITyCustom tyName (map trTm tyParams)
 trTy (PTyPTm t) = ITyTm (trTm t)
 
 trSwitch :: Switch -> ITm
-trSwitch Switch {switchOn, cases} = 
-    let branches = map (\(Case {caseOn, caseBody}) -> (map trTm caseOn, trTm caseBody)) cases in  
-  ITmMatch
-    (map trTm switchOn) branches 
+trSwitch Switch {switchOn, cases} =
+  let branches = map (\(Case {caseOn, caseBody}) -> (map trTm caseOn, trTm caseBody)) cases
+   in ITmMatch
+        (map trTm switchOn)
+        branches
 
-trProg :: Prog -> IProg 
-trProg = map trProgEl 
+trProg :: Prog -> IProg
+trProg = map trProgEl
 
-trProgEl :: ProgEl -> IProgEl 
+trProgEl :: ProgEl -> IProgEl
 trProgEl (PDecl decl) = IIDecl $ trDecl decl
 trProgEl (PFunc func) = IIFunc $ trFunc (doShadowing func)
 
-trDecl :: Decl -> IDecl 
-trDecl (PTy tydecl) = ITy $ trTyDecl tydecl 
+trDecl :: Decl -> IDecl
+trDecl (PTy tydecl) = ITy $ trTyDecl tydecl
 trDecl (Rec recdecl) = IRec $ trRecDecl recdecl
 
-trTyDecl :: TyDecl -> ITyDecl 
-trTyDecl TyDecl {
-  tyDeclName, tyDeclParams, tyDeclConstructors
-} = ITyDecl {
-  iTyDeclName = tyDeclName, 
-  iTyDeclParams = map trAnnParam tyDeclParams, 
-  iTyDeclConstructors = map trConstructor tyDeclConstructors
-}
+trTyDecl :: TyDecl -> ITyDecl
+trTyDecl
+  TyDecl
+    { tyDeclName,
+      tyDeclParams,
+      tyDeclConstructors
+    } =
+    ITyDecl
+      { iTyDeclName = tyDeclName,
+        iTyDeclParams = map trAnnParam tyDeclParams,
+        iTyDeclConstructors = map trConstructor tyDeclConstructors
+      }
 
-trRecDecl :: RecDecl -> IRecDecl 
-trRecDecl RecDecl {
-  recDeclName, recDeclParams, recDeclFields
-} = IRecDecl {
-  iRecDeclName = recDeclName, 
-  iRecDeclParams = map trAnnParam recDeclParams, 
-  iRecDeclConstructor = "mk" ++ recDeclName, 
-  iRecDeclFields = map (trAnnParam . (`AnnParam` True)) recDeclFields
-} 
+trRecDecl :: RecDecl -> IRecDecl
+trRecDecl
+  RecDecl
+    { recDeclName,
+      recDeclParams,
+      recDeclFields
+    } =
+    IRecDecl
+      { iRecDeclName = recDeclName,
+        iRecDeclParams = map trAnnParam recDeclParams,
+        iRecDeclConstructor = "mk" ++ recDeclName,
+        iRecDeclFields = map (trAnnParam . (`AnnParam` True)) recDeclFields
+      }
 
-trFunc :: Func -> IFunc 
-trFunc Func {
-  funcName, funcRetTy, funcArgs, funcBody
-} = IFunc {
-  iFuncName = funcName, 
-  iFuncRetTy = trTy funcRetTy, 
-  iFuncArgs = map trAnnParam funcArgs, 
-  iFuncBody = trTm funcBody, 
-  iWhere = []
-} 
+trFunc :: Func -> IFunc
+trFunc
+  Func
+    { funcName,
+      funcRetTy,
+      funcArgs,
+      funcBody
+    } =
+    IFunc
+      { iFuncName = funcName,
+        iFuncRetTy = trTy funcRetTy,
+        iFuncArgs = map trAnnParam funcArgs,
+        iFuncBody = trTm funcBody,
+        iWhere = []
+      }
 
-trConstructor :: Constructor -> IConstructor 
-trConstructor Constructor {
-  conName, conArgs, conTy
-} = IConstructor {
-  iConName = conName, 
-  iConArgs = map trAnnParam conArgs, 
-  iConTy = trTy conTy 
-} 
+trConstructor :: Constructor -> IConstructor
+trConstructor
+  Constructor
+    { conName,
+      conArgs,
+      conTy
+    } =
+    IConstructor
+      { iConName = conName,
+        iConArgs = map trAnnParam conArgs,
+        iConTy = trTy conTy
+      }
 
 trAnnParam :: AnnParam -> IAnnParam
 trAnnParam (AnnParam (ty, str) vis) = IAnnParam (str, trTy ty) vis
-
 
 doShadowing :: Func -> Func
 doShadowing f =
@@ -122,20 +138,23 @@ doStmts vars (x : xs) = case x of
   DeclAssign ty var tm -> DeclAssign ty var tm : doStmts (M.insert var ty vars) xs
   _ -> x : doStmts vars xs
 
-unLoop :: Func -> IFunc 
-unLoop f = undefined 
+unLoopTm :: PTm -> ITm 
+unLoopTm = undefined 
+unLoopFunc :: Func -> IFunc 
+unLoopFunc Func {
+  funcName, funcRetTy, funcArgs, funcBody
+} = let body = unLoopTm funcBody in undefined 
 
 defOuter :: List Stmt -> String -> List AnnParam -> PTy -> IFunc
 defOuter hdr fname params ty =
-  let funcName = fname ++ "_reco"
-      funcInner = fname ++ "_reci"
-      iFunc = trFunc 
-   in undefined 
-
+  let funcName = fname
+      funcInner = fname ++ "_rec"
+      iFunc = trFunc
+   in undefined
 
 defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> List (PTy, String) -> PTy -> Func
 defInner condition tl body fname params vars retty =
-  let funcName = fname ++ "_reci"
+  let funcName = fname ++ "_rec"
       hvars = map (`AnnParam` True) vars
    in Func
         { funcName = funcName,
