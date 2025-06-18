@@ -22,10 +22,10 @@ trTm (PTmIf c t e) = ITmIf (trTm c) (trTm t) (trTm e)
 trTm (PTmReturn t) = trTm t -- todo
 trTm (PTmSwitch s) = trSwitch s
 
-trStmt :: List Stmt -> ITm -> ITm 
-trStmt [] tm = tm 
+trStmt :: List Stmt -> ITm -> ITm
+trStmt [] tm = tm
 trStmt (DeclAssign ty v tm : xs) tm2 = ITmLet v (trTy ty) (trTm tm) (trStmt xs tm2)
-trStmt _ _ = error "should be transformed" 
+trStmt _ _ = error "should be transformed"
 
 trTy :: PTy -> ITy
 trTy PTyNat = ITyNat
@@ -132,7 +132,7 @@ doPTms m (PTmSwitch s) =
       { switchOn = map (doPTms m) (switchOn s),
         cases = map (\c -> Case {caseOn = map (doPTms m) (caseOn c), caseBody = doPTms m (caseBody c)}) (cases s)
       }
--- doPTms _ tm = tm
+doPTms _ tm = tm
 
 doStmts :: M.Map String PTy -> List Stmt -> List Stmt
 doStmts _ [] = []
@@ -141,41 +141,43 @@ doStmts vars (x : xs) = case x of
     Nothing -> error "assign before declare"
     Just ty -> DeclAssign ty var tm : doStmts vars xs
   DeclAssign ty var tm -> DeclAssign ty var tm : doStmts (M.insert var ty vars) xs
-  While {condition, body } -> While {condition, body = doStmts vars body} : doStmts vars xs
+  While {condition, body} -> While {condition, body = doStmts vars body} : doStmts vars xs
 
--- only works for one loop stmt currently 
+-- only works for one loop stmt currently
 getLoopStmt :: List Stmt -> List Stmt -> List Stmt -> Maybe (List Stmt, PTm, List Stmt, List Stmt)
-getLoopStmt [] _ _ = Nothing 
-getLoopStmt (x : xs) hdr tl = case x of 
+getLoopStmt [] _ _ = Nothing
+getLoopStmt (x : xs) hdr tl = case x of
   While {condition, body} -> Just (hdr, condition, body, xs)
   _ -> getLoopStmt xs (hdr ++ [x]) []
 
-
--- no tail statements after while 
+-- no tail statements after while
 -- only unloops statements when function is toplevel block
-unLoopFunc :: Func -> IFunc 
-unLoopFunc f@(Func {
-  funcName, funcRetTy, funcArgs, funcBody
-}) = case funcBody of 
-  PTmBlock stmts tm -> case getLoopStmt stmts [] [] of 
-    Nothing -> trFunc f
-    Just (hdr, condition, body, tl) ->
-      let outer = defOuter hdr funcName funcArgs funcRetTy
-          inner = defInner condition tm body funcName funcArgs funcRetTy
-      in 
-        (trFunc outer) { iWhere = [ITmFunc (trFunc inner)]} 
-  _ -> trFunc f  
+unLoopFunc :: Func -> IFunc
+unLoopFunc
+  f@( Func
+        { funcName,
+          funcRetTy,
+          funcArgs,
+          funcBody
+        }
+      ) = case funcBody of
+    PTmBlock stmts tm -> case getLoopStmt stmts [] [] of
+      Nothing -> trFunc f
+      Just (hdr, condition, body, tl) ->
+        let outer = defOuter hdr funcName funcArgs funcRetTy
+            inner = defInner condition tm body funcName funcArgs funcRetTy
+         in (trFunc outer) {iWhere = [ITmFunc (trFunc inner)]}
+    _ -> trFunc f
 
 defOuter :: List Stmt -> String -> List AnnParam -> PTy -> Func
 defOuter hdr funcName funcArgs funcRetTy =
-    let funcInner = funcName ++ "_rec"
-
-   in Func {
-    funcName,
-    funcArgs, 
-    funcRetTy,
-    funcBody = PTmBlock hdr (PTmReturn (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) funcArgs)))
-   }
+  let funcInner = funcName ++ "_rec"
+   in Func
+        { funcName,
+          funcArgs,
+          funcRetTy,
+          funcBody = PTmBlock hdr (PTmReturn (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) funcArgs)))
+        }
 
 defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> PTy -> Func
 defInner condition tl body fname params retty =
@@ -192,4 +194,3 @@ getAnnParamVar (AnnParam (_, str) _) = str
 
 getAnnParamPTy :: AnnParam -> PTy
 getAnnParamPTy (AnnParam (ty, _) _) = ty
-
