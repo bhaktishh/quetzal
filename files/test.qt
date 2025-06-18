@@ -1,38 +1,7 @@
-type Vect(Ty t, Nat n) {
-    constructor Nil() of Vect(t, 0);
-    constructor Cons(t head, Vect(t, n) tail) of Vect(t, 1+n);
-}
-type Pair(Ty a, Func(a x => Ty) p) {
-    constructor MkPair (a x, p(t) y) of Pair(a, p);
-}
-
-record DPairRec(Ty t, Func(t a => Ty) p) {
-    t fst; 
-    p(fst) snd;
-}
-
-func add5(Nat x) of Nat {
-    x = x + 5; 
-    return x; 
-}
-
-func test<>() of Void {}
-
-func append<Nat n, Nat m, Ty t> (Vect(t, n) v1, Vect(t, m) v2) of Vect(t, n+m) {
-    switch (v1, v2) {
-        case (Nil(), v2) {
-            return v2;
-        }
-        case (Cons(x, xs), v2) {
-            v2 = append(xs, v2);
-            return Cons(x, v2);
-        }   
+func testLoop (Bool n) of Nat {
+    while (n) {
+        n = True;
+        n = False;
     }
-}
-
-func replicate<Ty t>(t x, Nat n) of Vect(t, n) {
-    switch(n) {
-        case (0) {return Nil;}
-        case (S(n)) {return Cons (x, replicate(x,n));}
-    }
+    return 1;
 }

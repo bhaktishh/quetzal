@@ -12,7 +12,7 @@ record DPairRec(Ty t, Func(t a => Ty) p) {
 }
 
 func add5(Nat x) of Nat {
-    let Nat x = x + 5; 
+    x = x + 5; 
     return x; 
 }
 
@@ -35,23 +35,4 @@ func replicate<Ty t>(t x, Nat n) of Vect(t, n) {
         case (0) {return Nil;}
         case (S(n)) {return Cons (x, replicate(x,n));}
     }
-}
-
-func test(Nat x) of Void { 
-    if (x < 5) {
-        x = 5;
-    } else {
-        Nat y = 10;
-    }
-}
-
-func power(Nat x, Nat y) of Nat { 
-    if (y == 0) {
-        return 1; 
-    }
-    while (y > 1) {
-        x = x * x; 
-        y = y - 1; 
-    }
-    return x; 
 }

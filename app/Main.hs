@@ -252,6 +252,7 @@ pStmt :: Parser Stmt
 pStmt =
   try pDeclAssign
     <|> try pAssign
+    <|> try pWhile 
 
 -- <|> try pWhile
 
@@ -390,35 +391,35 @@ parseFromFile p file = runParser p file <$> readFile file
 -- combine Nothing = []
 -- combine (Just (xs, x)) = xs ++ [x]
 
-doShadowing :: Func -> Func
-doShadowing f =
-  let tm = funcBody f
-   in f {funcBody = doPTms (M.fromList (map (\(AnnParam (t, v) _) -> (v, t)) (funcArgs f))) tm}
+-- doShadowing :: Func -> Func
+-- doShadowing f =
+--   let tm = funcBody f
+--    in f {funcBody = doPTms (M.fromList (map (\(AnnParam (t, v) _) -> (v, t)) (funcArgs f))) tm}
 
-doPTms :: M.Map String PTy -> PTm -> PTm
-doPTms m (PTmBlock stmts tm) = PTmBlock (doStmts m stmts) tm
-doPTms m (PTmPlus t1 t2) = PTmPlus (doPTms m t1) (doPTms m t2)
-doPTms m (PTmCon v tms) = PTmCon v (map (doPTms m) tms)
-doPTms m (PTmFunc f) = PTmFunc f {funcBody = doPTms m (funcBody f)}
-doPTms m (PTmFuncCall t ts) = PTmFuncCall (doPTms m t) (map (doPTms m) ts)
-doPTms m (PTmIf t1 t2 t3) = PTmIf (doPTms m t1) (doPTms m t2) (doPTms m t3)
-doPTms m (PTmReturn t) = PTmReturn (doPTms m t)
-doPTms m (PTmSwitch s) =
-  PTmSwitch
-    s
-      { switchOn = map (doPTms m) (switchOn s),
-        cases = map (\c -> Case {caseOn = map (doPTms m) (caseOn c), caseBody = doPTms m (caseBody c)}) (cases s)
-      }
-doPTms _ tm = tm
+-- doPTms :: M.Map String PTy -> PTm -> PTm
+-- doPTms m (PTmBlock stmts tm) = PTmBlock (doStmts m stmts) tm
+-- doPTms m (PTmPlus t1 t2) = PTmPlus (doPTms m t1) (doPTms m t2)
+-- doPTms m (PTmCon v tms) = PTmCon v (map (doPTms m) tms)
+-- doPTms m (PTmFunc f) = PTmFunc f {funcBody = doPTms m (funcBody f)}
+-- doPTms m (PTmFuncCall t ts) = PTmFuncCall (doPTms m t) (map (doPTms m) ts)
+-- doPTms m (PTmIf t1 t2 t3) = PTmIf (doPTms m t1) (doPTms m t2) (doPTms m t3)
+-- doPTms m (PTmReturn t) = PTmReturn (doPTms m t)
+-- doPTms m (PTmSwitch s) =
+--   PTmSwitch
+--     s
+--       { switchOn = map (doPTms m) (switchOn s),
+--         cases = map (\c -> Case {caseOn = map (doPTms m) (caseOn c), caseBody = doPTms m (caseBody c)}) (cases s)
+--       }
+-- doPTms _ tm = tm
 
-doStmts :: M.Map String PTy -> List Stmt -> List Stmt
-doStmts _ [] = []
-doStmts vars (x : xs) = case x of
-  Assign var tm -> case M.lookup var vars of
-    Nothing -> error "assign before declare"
-    Just ty -> DeclAssign ty var tm : doStmts vars xs
-  DeclAssign ty var tm -> DeclAssign ty var tm : doStmts (M.insert var ty vars) xs
-  _ -> x : doStmts vars xs
+-- doStmts :: M.Map String PTy -> List Stmt -> List Stmt
+-- doStmts _ [] = []
+-- doStmts vars (x : xs) = case x of
+--   Assign var tm -> case M.lookup var vars of
+--     Nothing -> error "assign before declare"
+--     Just ty -> DeclAssign ty var tm : doStmts vars xs
+--   DeclAssign ty var tm -> DeclAssign ty var tm : doStmts (M.insert var ty vars) xs
+--   _ -> x : doStmts vars xs
 
 -- {-
 -- foo_iterative(params){
@@ -447,45 +448,45 @@ doStmts vars (x : xs) = case x of
 
 -- may have to parse to a second data type because of the differences
 
-unLoopF :: Func -> List PTm
-unLoopF = undefined
+-- unLoopF :: Func -> List PTm
+-- unLoopF = undefined
 
-unLoop :: PTm -> PTm
-unLoop (PTmFunc f) =
-  let whrDecs = unLoopF f
-   in undefined
+-- unLoop :: PTm -> PTm
+-- unLoop (PTmFunc f) =
+--   let whrDecs = unLoopF f
+--    in undefined
 
-getHVars :: List Stmt -> List (PTy, String)
-getHVars stmts = [] -- todo
+-- getHVars :: List Stmt -> List (PTy, String)
+-- getHVars stmts = [] -- todo
 
-defOuter :: List Stmt -> String -> List AnnParam -> PTy -> Func
-defOuter hdr fname params ty =
-  let funcName = fname ++ "_reco"
-      funcInner = fname ++ "_reci"
-      hvars = map (`AnnParam` True) $ getHVars hdr
-   in Func
-        { funcName = funcName,
-          funcArgs = params,
-          funcRetTy = ty,
-          funcBody = PTmBlock hdr (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) (params ++ hvars)))
-        }
+-- defOuter :: List Stmt -> String -> List AnnParam -> PTy -> Func
+-- defOuter hdr fname params ty =
+--   let funcName = fname ++ "_reco"
+--       funcInner = fname ++ "_reci"
+--       hvars = map (`AnnParam` True) $ getHVars hdr
+--    in Func
+--         { funcName = funcName,
+--           funcArgs = params,
+--           funcRetTy = ty,
+--           funcBody = PTmBlock hdr (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) (params ++ hvars)))
+--         }
 
-defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> List (PTy, String) -> PTy -> Func
-defInner condition tl body fname params vars retty =
-  let funcName = fname ++ "_reci"
-      hvars = map (`AnnParam` True) vars
-   in Func
-        { funcName = funcName,
-          funcArgs = params ++ hvars,
-          funcRetTy = retty,
-          funcBody = PTmIf (PTmNot condition) (PTmReturn tl) (PTmBlock body (PTmFuncCall (PTmVar funcName) (map (PTmVar . getAnnParamVar) (params ++ hvars))))
-        }
+-- defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> List (PTy, String) -> PTy -> Func
+-- defInner condition tl body fname params vars retty =
+--   let funcName = fname ++ "_reci"
+--       hvars = map (`AnnParam` True) vars
+--    in Func
+--         { funcName = funcName,
+--           funcArgs = params ++ hvars,
+--           funcRetTy = retty,
+--           funcBody = PTmIf (PTmNot condition) (PTmReturn tl) (PTmBlock body (PTmFuncCall (PTmVar funcName) (map (PTmVar . getAnnParamVar) (params ++ hvars))))
+--         }
 
-getAnnParamVar :: AnnParam -> String
-getAnnParamVar (AnnParam (_, str) _) = str
+-- getAnnParamVar :: AnnParam -> String
+-- getAnnParamVar (AnnParam (_, str) _) = str
 
-getAnnParamPTy :: AnnParam -> PTy
-getAnnParamPTy (AnnParam (ty, _) _) = ty
+-- getAnnParamPTy :: AnnParam -> PTy
+-- getAnnParamPTy (AnnParam (ty, _) _) = ty
 
 -- unSwitch :: Func -> Func
 -- unSwitch f = undefined
@@ -495,10 +496,10 @@ getAnnParamPTy (AnnParam (ty, _) _) = ty
 --   Left _ -> error "bruh"
 --   Right tm -> tm {funcs = map doShadowing (funcs tm)}
 
-processFile :: String -> IO Prog
-processFile file = do
+processFile :: String -> Parser a -> IO a
+processFile file p = do
   x <- readFile file
-  case parse pProg "" x of
+  case parse p "" x of
     Left _ -> error "wtf"
     Right tm -> pure tm
 

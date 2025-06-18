@@ -26,7 +26,7 @@ data ITm
   | ITmFuncCall ITm (List ITm)
   | ITmIf ITm ITm ITm
   | ITmMatch (List ITm) (List (List ITm, ITm))
-  | ITmLet ITm ITy ITm
+  | ITmLet String ITy ITm ITm 
   deriving (Show, Eq)
 
 data IConstructor = IConstructor
