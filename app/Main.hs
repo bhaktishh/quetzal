@@ -8,11 +8,13 @@ import qualified Data.Map as M
 import Data.Tuple (swap)
 import Data.Void (Void)
 import GHC.TypeLits (Nat)
+import ITypes
 import Lib
+import PToI
 import PTypes
 import Text.Megaparsec (MonadParsec (eof, try), Parsec, many, parse, runParser, sepBy, sepBy1, sepEndBy1, some, (<|>))
 import Text.Megaparsec.Char
-import ToIdris
+import Unparse
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
 -- is there a way i can add a list of variables and types to carry around? or should that be a second pass
@@ -252,7 +254,7 @@ pStmt :: Parser Stmt
 pStmt =
   try pDeclAssign
     <|> try pAssign
-    <|> try pWhile 
+    <|> try pWhile
 
 -- <|> try pWhile
 
@@ -496,12 +498,16 @@ parseFromFile p file = runParser p file <$> readFile file
 --   Left _ -> error "bruh"
 --   Right tm -> tm {funcs = map doShadowing (funcs tm)}
 
-processFile :: String -> Parser a -> IO a
-processFile file p = do
+processFile :: String -> IO ()
+processFile file = do
   x <- readFile file
-  case parse p "" x of
+  case parse pProg "" x of
     Left _ -> error "wtf"
-    Right tm -> pure tm
+    Right tm -> writeIdris (map doFuncs tm) "files/test.idr"
 
-writeIdris :: Prog -> String -> IO ()
-writeIdris p fpath = writeFile fpath (evalState (uProg p) (0, False))
+doFuncs :: ProgEl -> IProgEl
+doFuncs (PFunc f) = IIFunc $ (unLoopFunc . doShadowing) f
+doFuncs (PDecl x) = IIDecl $ trDecl x
+
+writeIdris :: IProg -> String -> IO ()
+writeIdris p fpath = writeFile fpath (unparse p)
