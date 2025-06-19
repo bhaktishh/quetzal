@@ -265,6 +265,27 @@ pPlusPTm = do
   y <- pSpaces pPTm
   pure $ PTmPlus x y
 
+pTmMinus :: Parser PTm
+pTmMinus = do
+  x <- pSpaces pPTm1
+  _ <- pSpaces $ char '-'
+  y <- pSpaces pPTm
+  pure $ PTmMinus x y
+
+pTmBEq :: Parser PTm
+pTmBEq = do
+  x <- pSpaces pPTm1
+  _ <- pSpaces $ string "=="
+  y <- pSpaces pPTm
+  pure $ PTmBEq x y
+
+pTmBLT :: Parser PTm
+pTmBLT = do
+  x <- pSpaces pPTm1
+  _ <- pSpaces $ char '<'
+  y <- pSpaces pPTm
+  pure $ PTmBLT x y
+
 pPTmCon :: Parser PTm
 pPTmCon = do
   name <- pSpaces pUpperStr
@@ -370,6 +391,9 @@ pPTy =
 pPTm0 :: Parser PTm
 pPTm0 =
   try pPlusPTm
+    <|> try pTmMinus 
+    <|> try pTmBEq
+    <|> try pTmBLT
     <|> try pPTmReturn
     <|> try pFuncCall
     <|> try pPTmCon
@@ -388,115 +412,6 @@ pPTm = try pPTmBlock <|> try pPTm0
 
 -- -- parsing utils
 parseFromFile p file = runParser p file <$> readFile file
-
--- combine :: Maybe ([Stmt], Stmt) -> List Stmt
--- combine Nothing = []
--- combine (Just (xs, x)) = xs ++ [x]
-
--- doShadowing :: Func -> Func
--- doShadowing f =
---   let tm = funcBody f
---    in f {funcBody = doPTms (M.fromList (map (\(AnnParam (t, v) _) -> (v, t)) (funcArgs f))) tm}
-
--- doPTms :: M.Map String PTy -> PTm -> PTm
--- doPTms m (PTmBlock stmts tm) = PTmBlock (doStmts m stmts) tm
--- doPTms m (PTmPlus t1 t2) = PTmPlus (doPTms m t1) (doPTms m t2)
--- doPTms m (PTmCon v tms) = PTmCon v (map (doPTms m) tms)
--- doPTms m (PTmFunc f) = PTmFunc f {funcBody = doPTms m (funcBody f)}
--- doPTms m (PTmFuncCall t ts) = PTmFuncCall (doPTms m t) (map (doPTms m) ts)
--- doPTms m (PTmIf t1 t2 t3) = PTmIf (doPTms m t1) (doPTms m t2) (doPTms m t3)
--- doPTms m (PTmReturn t) = PTmReturn (doPTms m t)
--- doPTms m (PTmSwitch s) =
---   PTmSwitch
---     s
---       { switchOn = map (doPTms m) (switchOn s),
---         cases = map (\c -> Case {caseOn = map (doPTms m) (caseOn c), caseBody = doPTms m (caseBody c)}) (cases s)
---       }
--- doPTms _ tm = tm
-
--- doStmts :: M.Map String PTy -> List Stmt -> List Stmt
--- doStmts _ [] = []
--- doStmts vars (x : xs) = case x of
---   Assign var tm -> case M.lookup var vars of
---     Nothing -> error "assign before declare"
---     Just ty -> DeclAssign ty var tm : doStmts vars xs
---   DeclAssign ty var tm -> DeclAssign ty var tm : doStmts (M.insert var ty vars) xs
---   _ -> x : doStmts vars xs
-
--- {-
--- foo_iterative(params){
---     header
---     while(condition){
---         loop_body
---     }
---
---     return tail
--- }
-
--- foo_recursive(params){
---     header
---     return foo_recursion(params, header_vars)
--- }
-
--- foo_recursion(params, header_vars){
---     if(!condition){
---         return tail
---     }
-
---     loop_body
---     return foo_recursion(params, modified_header_vars)
--- }
--- -}
-
--- may have to parse to a second data type because of the differences
-
--- unLoopF :: Func -> List PTm
--- unLoopF = undefined
-
--- unLoop :: PTm -> PTm
--- unLoop (PTmFunc f) =
---   let whrDecs = unLoopF f
---    in undefined
-
--- getHVars :: List Stmt -> List (PTy, String)
--- getHVars stmts = [] -- todo
-
--- defOuter :: List Stmt -> String -> List AnnParam -> PTy -> Func
--- defOuter hdr fname params ty =
---   let funcName = fname ++ "_reco"
---       funcInner = fname ++ "_reci"
---       hvars = map (`AnnParam` True) $ getHVars hdr
---    in Func
---         { funcName = funcName,
---           funcArgs = params,
---           funcRetTy = ty,
---           funcBody = PTmBlock hdr (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) (params ++ hvars)))
---         }
-
--- defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> List (PTy, String) -> PTy -> Func
--- defInner condition tl body fname params vars retty =
---   let funcName = fname ++ "_reci"
---       hvars = map (`AnnParam` True) vars
---    in Func
---         { funcName = funcName,
---           funcArgs = params ++ hvars,
---           funcRetTy = retty,
---           funcBody = PTmIf (PTmNot condition) (PTmReturn tl) (PTmBlock body (PTmFuncCall (PTmVar funcName) (map (PTmVar . getAnnParamVar) (params ++ hvars))))
---         }
-
--- getAnnParamVar :: AnnParam -> String
--- getAnnParamVar (AnnParam (_, str) _) = str
-
--- getAnnParamPTy :: AnnParam -> PTy
--- getAnnParamPTy (AnnParam (ty, _) _) = ty
-
--- unSwitch :: Func -> Func
--- unSwitch f = undefined
-
--- process :: String -> Prog
--- process x = case parse pProg "" x of
---   Left _ -> error "bruh"
---   Right tm -> tm {funcs = map doShadowing (funcs tm)}
 
 processFile :: String -> IO ()
 processFile file = do

@@ -1,14 +1,18 @@
 module Test
 
-testLoop : (n : Bool) -> Nat
+testLoop : (n : Nat) -> Nat
 testLoop n = 
-	(testLoop_rec n)
+	let x : Nat = 11 in
+		let testLoop_recVal : Nat = (testLoop_rec n) in
+			let n : Nat = (n + 1) in
+				n
 where 
-	testLoop_rec : (n : Bool) -> Nat
+	testLoop_rec : (n : Nat) -> Nat
 	testLoop_rec n = 
-		if not n then 
-			1
+		if not (n < 10) then 
+			n
 		else 
-			let n : Bool = True in
-				let n : Bool = False in
-					(testLoop_rec n)
+			let n : Nat = (n + 1) in
+				(testLoop_rec n)
+
+

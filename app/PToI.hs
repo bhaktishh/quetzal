@@ -15,12 +15,15 @@ trTm (PTmNot t) = ITmNot (trTm t)
 trTm (PTmPTy t) = ITmTy (trTy t)
 trTm (PTmVar x) = ITmVar x
 trTm (PTmCon x cs) = ITmCon x (map trTm cs)
-trTm (PTmFunc f) = ITmFunc (trFunc f)
+trTm (PTmFunc f) = ITmFunc $ unLoopFunc f
 trTm (PTmFuncCall f args) = ITmFuncCall (trTm f) (map trTm args)
 trTm (PTmBlock xs t) = trStmt xs (trTm t)
 trTm (PTmIf c t e) = ITmIf (trTm c) (trTm t) (trTm e)
 trTm (PTmReturn t) = trTm t -- todo
 trTm (PTmSwitch s) = trSwitch s
+trTm (PTmMinus t1 t2) = ITmMinus (trTm t1) (trTm t2)
+trTm (PTmBEq t1 t2) = ITmBEq (trTm t1) (trTm t2)
+trTm (PTmBLT t1 t2) = ITmBLT (trTm t1) (trTm t2)
 
 trStmt :: List Stmt -> ITm -> ITm
 trStmt [] tm = tm
@@ -147,11 +150,9 @@ doStmts vars (x : xs) = case x of
 getLoopStmt :: List Stmt -> List Stmt -> List Stmt -> Maybe (List Stmt, PTm, List Stmt, List Stmt)
 getLoopStmt [] _ _ = Nothing
 getLoopStmt (x : xs) hdr tl = case x of
-  While {condition, body} -> Just (hdr, condition, body, xs)
+  While {condition, body} -> Just (hdr, condition, body, xs ++ tl)
   _ -> getLoopStmt xs (hdr ++ [x]) []
 
--- no tail statements after while
--- only unloops statements when function is toplevel block
 unLoopFunc :: Func -> IFunc
 unLoopFunc
   f@( Func
@@ -164,29 +165,32 @@ unLoopFunc
     PTmBlock stmts tm -> case getLoopStmt stmts [] [] of
       Nothing -> trFunc f
       Just (hdr, condition, body, tl) ->
-        let outer = defOuter hdr funcName funcArgs funcRetTy
-            inner = defInner condition tm body funcName funcArgs funcRetTy
-         in (trFunc outer) {iWhere = [ITmFunc (trFunc inner)]}
-    _ -> trFunc f
+        let (outer, innerName) = defOuter hdr tl funcName funcArgs funcRetTy tm
+            inner = defInner condition tm body innerName funcArgs funcRetTy 
+            in 
+              (unLoopFunc outer) {iWhere = [ITmFunc (unLoopFunc inner)]}
+    _ -> trFunc f 
 
-defOuter :: List Stmt -> String -> List AnnParam -> PTy -> Func
-defOuter hdr funcName funcArgs funcRetTy =
+-- the inner function needs to return all updated variables so any updates can be reflected in the outer function 
+-- or all the tail statements need to be part of the inner function 
+defOuter :: List Stmt -> List Stmt -> String -> List AnnParam -> PTy -> PTm -> (Func, String)
+defOuter hdr tl funcName funcArgs funcRetTy retTm =
   let funcInner = funcName ++ "_rec"
-   in Func
+      recLet = DeclAssign funcRetTy (funcName ++ "_recVal") (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) funcArgs))
+  in 
+    (Func
         { funcName,
           funcArgs,
           funcRetTy,
-          funcBody = PTmBlock hdr (PTmReturn (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) funcArgs)))
-        }
+          funcBody = PTmBlock (hdr ++ [recLet] ++ tl ) retTm
+        }, funcInner)
 
 defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> PTy -> Func
-defInner condition tl body fname params retty =
-  let funcName = fname ++ "_rec"
-   in Func
-        { funcName = funcName,
+defInner condition tl body fname params retty = Func
+        { funcName = fname,
           funcArgs = params,
           funcRetTy = retty,
-          funcBody = PTmIf (PTmNot condition) tl (PTmBlock body (PTmFuncCall (PTmVar funcName) (map (PTmVar . getAnnParamVar) params)))
+          funcBody = PTmIf (PTmNot condition) tl (PTmBlock body (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) params)))
         }
 
 getAnnParamVar :: AnnParam -> String

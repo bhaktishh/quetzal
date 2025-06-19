@@ -1,204 +1,204 @@
-{-# LANGUAGE NamedFieldPuns #-}
+-- {-# LANGUAGE NamedFieldPuns #-}
 
 module ToIdris where
 
-import Control.Monad.State.Lazy
-import Data.Char (toLower)
-import Data.List (intercalate, intersperse)
-import PTypes
+-- import Control.Monad.State.Lazy
+-- import Data.Char (toLower)
+-- import Data.List (intercalate, intersperse)
+-- import PTypes
 
-type Indent a = State (Int, Bool) a
+-- type Indent a = State (Int, Bool) a
 
-uProg :: Prog -> Indent String
-uProg [] = pure ""
-uProg (x : xs) = case x of
-  PDecl decl -> do
-    dec <- uPTypes decl
-    prog <- uProg xs
-    pure $ dec ++ "\n\n" ++ prog
-  PFunc func -> do
-    f <- uFuncs func
-    pr <- uProg xs
-    pure $ f ++ "\n\n" ++ pr
+-- uProg :: Prog -> Indent String
+-- uProg [] = pure ""
+-- uProg (x : xs) = case x of
+--   PDecl decl -> do
+--     dec <- uPTypes decl
+--     prog <- uProg xs
+--     pure $ dec ++ "\n\n" ++ prog
+--   PFunc func -> do
+--     f <- uFuncs func
+--     pr <- uProg xs
+--     pure $ f ++ "\n\n" ++ pr
 
-uFuncs :: Func -> Indent String
-uFuncs
-  Func
-    { funcName,
-      funcRetTy,
-      funcArgs,
-      funcBody
-    } = do
-    retty <- uPTy funcRetTy
-    args <- mapM (uAnnParam True) funcArgs
-    body <- uPTm funcBody
-    pure $
-      funcName
-        ++ " : "
-        ++ concat args
-        ++ retty
-        ++ "\n"
-        ++ funcName
-        ++ " "
-        ++ unwords (map (\(AnnParam (_, v) _) -> v) (filter (\(AnnParam (_, _) vis) -> vis) funcArgs))
-        ++ " = "
-        ++ body
+-- uFuncs :: Func -> Indent String
+-- uFuncs
+--   Func
+--     { funcName,
+--       funcRetTy,
+--       funcArgs,
+--       funcBody
+--     } = do
+--     retty <- uPTy funcRetTy
+--     args <- mapM (uAnnParam True) funcArgs
+--     body <- uPTm funcBody
+--     pure $
+--       funcName
+--         ++ " : "
+--         ++ concat args
+--         ++ retty
+--         ++ "\n"
+--         ++ funcName
+--         ++ " "
+--         ++ unwords (map (\(AnnParam (_, v) _) -> v) (filter (\(AnnParam (_, _) vis) -> vis) funcArgs))
+--         ++ " = "
+--         ++ body
 
-uPTypes :: Decl -> Indent String
-uPTypes (PTy tdecl) = uPTyDecl tdecl
-uPTypes (Rec recdecl) = uRecDecl recdecl
+-- uPTypes :: Decl -> Indent String
+-- uPTypes (PTy tdecl) = uPTyDecl tdecl
+-- uPTypes (Rec recdecl) = uRecDecl recdecl
 
-uPTyDecl :: TyDecl -> Indent String
-uPTyDecl
-  TyDecl
-    { tyDeclName,
-      tyDeclParams,
-      tyDeclConstructors
-    } = do
-    params <- mapM (uAnnParam True) tyDeclParams
-    constructors <- mapM uPTyDeclConstructor tyDeclConstructors
-    pure $
-      "data"
-        ++ " "
-        ++ tyDeclName
-        ++ " : "
-        ++ concat params
-        ++ "PType where \n"
-        ++ concat constructors
+-- uPTyDecl :: TyDecl -> Indent String
+-- uPTyDecl
+--   TyDecl
+--     { tyDeclName,
+--       tyDeclParams,
+--       tyDeclConstructors
+--     } = do
+--     params <- mapM (uAnnParam True) tyDeclParams
+--     constructors <- mapM uPTyDeclConstructor tyDeclConstructors
+--     pure $
+--       "data"
+--         ++ " "
+--         ++ tyDeclName
+--         ++ " : "
+--         ++ concat params
+--         ++ "PType where \n"
+--         ++ concat constructors
 
-uPTyDeclConstructor :: Constructor -> Indent String
-uPTyDeclConstructor Constructor {conName, conArgs, conTy} =
-  do
-    params <- mapM (uAnnParam True) conArgs
-    ty <- uPTy conTy
-    pure $
-      "\t"
-        ++ conName
-        ++ " : "
-        ++ concat params
-        ++ ty
-        ++ "\n"
+-- uPTyDeclConstructor :: Constructor -> Indent String
+-- uPTyDeclConstructor Constructor {conName, conArgs, conTy} =
+--   do
+--     params <- mapM (uAnnParam True) conArgs
+--     ty <- uPTy conTy
+--     pure $
+--       "\t"
+--         ++ conName
+--         ++ " : "
+--         ++ concat params
+--         ++ ty
+--         ++ "\n"
 
-uAnnParam :: Bool -> AnnParam -> Indent String
-uAnnParam arrow (AnnParam (ty, var) vis) = do
-  t <- uPTy ty
-  pure $ (if vis then "(" else "{") ++ var ++ " : " ++ t ++ (if vis then ")" else "}") ++ (if arrow then " -> " else " ")
+-- uAnnParam :: Bool -> AnnParam -> Indent String
+-- uAnnParam arrow (AnnParam (ty, var) vis) = do
+--   t <- uPTy ty
+--   pure $ (if vis then "(" else "{") ++ var ++ " : " ++ t ++ (if vis then ")" else "}") ++ (if arrow then " -> " else " ")
 
-uPTyDeclParam :: (PTy, String) -> Indent String
-uPTyDeclParam (ty, var) = do
-  t <- uPTy ty
-  pure $ "(" ++ var ++ " : " ++ t ++ ")" ++ " -> "
+-- uPTyDeclParam :: (PTy, String) -> Indent String
+-- uPTyDeclParam (ty, var) = do
+--   t <- uPTy ty
+--   pure $ "(" ++ var ++ " : " ++ t ++ ")" ++ " -> "
 
-uRecDecl :: RecDecl -> Indent String
-uRecDecl
-  RecDecl
-    { recDeclName,
-      recDeclParams,
-      recDeclFields
-    } =
-    do
-      params <- mapM (uAnnParam False) recDeclParams
-      fields <- mapM uRecDeclField recDeclFields
-      pure $
-        "record"
-          ++ " "
-          ++ recDeclName
-          ++ " "
-          ++ concat params
-          ++ "where \n"
-          ++ "\tconstructor Mk"
-          ++ recDeclName
-          ++ "\n"
-          ++ concat fields
+-- uRecDecl :: RecDecl -> Indent String
+-- uRecDecl
+--   RecDecl
+--     { recDeclName,
+--       recDeclParams,
+--       recDeclFields
+--     } =
+--     do
+--       params <- mapM (uAnnParam False) recDeclParams
+--       fields <- mapM uRecDeclField recDeclFields
+--       pure $
+--         "record"
+--           ++ " "
+--           ++ recDeclName
+--           ++ " "
+--           ++ concat params
+--           ++ "where \n"
+--           ++ "\tconstructor Mk"
+--           ++ recDeclName
+--           ++ "\n"
+--           ++ concat fields
 
-uRecDeclField :: (PTy, String) -> Indent String
-uRecDeclField (ty, var) = do
-  t <- uPTy ty
-  pure $ "\t" ++ var ++ " : " ++ t ++ "\n"
+-- uRecDeclField :: (PTy, String) -> Indent String
+-- uRecDeclField (ty, var) = do
+--   t <- uPTy ty
+--   pure $ "\t" ++ var ++ " : " ++ t ++ "\n"
 
-uPTy :: PTy -> Indent String
-uPTy PTyNat = pure "Nat"
-uPTy PTyBool = pure "Bool"
-uPTy PTyTy = pure "PType"
-uPTy PTyUnit = pure "()"
-uPTy (PTyCustom {tyName, tyParams}) = do
-  params <- mapM uPTm tyParams
-  pure $ tyName ++ " " ++ unwords params
-uPTy (PTyFunc {tyFuncArgs, tyFuncRetTy}) = do
-  params <- mapM uPTyDeclParam tyFuncArgs
-  t <- uPTy tyFuncRetTy
-  pure $ "(" ++ concat params ++ t ++ ")"
-uPTy (PTyPTm t) = uPTm t
+-- uPTy :: PTy -> Indent String
+-- uPTy PTyNat = pure "Nat"
+-- uPTy PTyBool = pure "Bool"
+-- uPTy PTyTy = pure "PType"
+-- uPTy PTyUnit = pure "()"
+-- uPTy (PTyCustom {tyName, tyParams}) = do
+--   params <- mapM uPTm tyParams
+--   pure $ tyName ++ " " ++ unwords params
+-- uPTy (PTyFunc {tyFuncArgs, tyFuncRetTy}) = do
+--   params <- mapM uPTyDeclParam tyFuncArgs
+--   t <- uPTy tyFuncRetTy
+--   pure $ "(" ++ concat params ++ t ++ ")"
+-- uPTy (PTyPTm t) = uPTm t
 
-uPTm :: PTm -> Indent String
-uPTm (PTmNat n) = pure $ show n
-uPTm (PTmBool b) = pure $ show b
-uPTm (PTmPlus n1 n2) = do
-  t1 <- uPTm n1
-  t2 <- uPTm n2
-  pure $ "(" ++ (if n1 == PTmNat 1 then "S " else t1 ++ " + ") ++ t2 ++ ")"
-uPTm (PTmVar v) = do
-  (ind, t) <- get
-  put (ind, False)
-  pure $ indent t ind ++ v
-uPTm (PTmFuncCall f args) = do
-  (ind, t) <- get
-  tm <- uPTm f
-  args <- mapM uPTm args
-  put (ind, False)
-  pure $ indent t ind ++ "(" ++ tm ++ (if null args then "" else " ") ++ unwords args ++ ")"
-uPTm (PTmCon c args) = do
-  args <- mapM uPTm args
-  (ind, t) <- get
-  put (ind, False)
-  pure $ indent t ind ++ c ++ (if null args then "" else " ") ++ unwords args
-uPTm (PTmReturn tm) = uPTm tm
-uPTm (PTmSwitch s) = uSwitch s
-uPTm (PTmIf cond thenCase elseCase) = error "TODO"
-uPTm PTmUnit = pure "()"
-uPTm (PTmPTy t) = uPTy t
-uPTm (PTmFunc f) = uFuncs f
-uPTm (PTmBlock stmts tm) = do
-  (ind, t) <- get
-  put (ind, False)
-  stmts <- mapM uStmt stmts
-  tm <- uPTm tm
-  pure $ indent t ind ++ concat stmts ++ tm
-uPTm (PTmNot tm) = do
-  t <- uPTm tm
-  pure $ "not " ++ t
+-- uPTm :: PTm -> Indent String
+-- uPTm (PTmNat n) = pure $ show n
+-- uPTm (PTmBool b) = pure $ show b
+-- uPTm (PTmPlus n1 n2) = do
+--   t1 <- uPTm n1
+--   t2 <- uPTm n2
+--   pure $ "(" ++ (if n1 == PTmNat 1 then "S " else t1 ++ " + ") ++ t2 ++ ")"
+-- uPTm (PTmVar v) = do
+--   (ind, t) <- get
+--   put (ind, False)
+--   pure $ indent t ind ++ v
+-- uPTm (PTmFuncCall f args) = do
+--   (ind, t) <- get
+--   tm <- uPTm f
+--   args <- mapM uPTm args
+--   put (ind, False)
+--   pure $ indent t ind ++ "(" ++ tm ++ (if null args then "" else " ") ++ unwords args ++ ")"
+-- uPTm (PTmCon c args) = do
+--   args <- mapM uPTm args
+--   (ind, t) <- get
+--   put (ind, False)
+--   pure $ indent t ind ++ c ++ (if null args then "" else " ") ++ unwords args
+-- uPTm (PTmReturn tm) = uPTm tm
+-- uPTm (PTmSwitch s) = uSwitch s
+-- uPTm (PTmIf cond thenCase elseCase) = error "TODO"
+-- uPTm PTmUnit = pure "()"
+-- uPTm (PTmPTy t) = uPTy t
+-- uPTm (PTmFunc f) = uFuncs f
+-- uPTm (PTmBlock stmts tm) = do
+--   (ind, t) <- get
+--   put (ind, False)
+--   stmts <- mapM uStmt stmts
+--   tm <- uPTm tm
+--   pure $ indent t ind ++ concat stmts ++ tm
+-- uPTm (PTmNot tm) = do
+--   t <- uPTm tm
+--   pure $ "not " ++ t
 
-uStmt :: Stmt -> Indent String
-uStmt (Assign v tm) = do
-  tm <- uPTm tm
-  (ind, t) <- get
-  _ <- put (ind + 1, True)
-  pure $ indent t ind ++ "let " ++ v ++ " = " ++ tm ++ " in\n"
-uStmt (DeclAssign ty v tm) = do
-  ty <- uPTy ty
-  tm <- uPTm tm
-  (ind, t) <- get
-  put (ind + 1, True)
-  pure $ indent t ind ++ "let " ++ v ++ " : " ++ ty ++ " = " ++ tm ++ " in\n"
-uStmt _ = error "should have been transformed bruh"
+-- uStmt :: Stmt -> Indent String
+-- uStmt (Assign v tm) = do
+--   tm <- uPTm tm
+--   (ind, t) <- get
+--   _ <- put (ind + 1, True)
+--   pure $ indent t ind ++ "let " ++ v ++ " = " ++ tm ++ " in\n"
+-- uStmt (DeclAssign ty v tm) = do
+--   ty <- uPTy ty
+--   tm <- uPTm tm
+--   (ind, t) <- get
+--   put (ind + 1, True)
+--   pure $ indent t ind ++ "let " ++ v ++ " : " ++ ty ++ " = " ++ tm ++ " in\n"
+-- uStmt _ = error "should have been transformed bruh"
 
-uSwitch :: Switch -> Indent String
-uSwitch (Switch {switchOn, cases}) = do
-  (ind, t) <- get
-  switchOn <- mapM uPTm switchOn
-  put (ind + 1, True)
-  cases <- mapM uCase cases
-  put (ind - 1, False)
-  pure $ indent t ind ++ "case (" ++ intercalate "," switchOn ++ ") of\n" ++ concat cases
+-- uSwitch :: Switch -> Indent String
+-- uSwitch (Switch {switchOn, cases}) = do
+--   (ind, t) <- get
+--   switchOn <- mapM uPTm switchOn
+--   put (ind + 1, True)
+--   cases <- mapM uCase cases
+--   put (ind - 1, False)
+--   pure $ indent t ind ++ "case (" ++ intercalate "," switchOn ++ ") of\n" ++ concat cases
 
-uCase :: Case -> Indent String
-uCase (Case {caseOn, caseBody}) = do
-  (ind, t) <- get
-  put (ind, False)
-  caseOn <- mapM uPTm caseOn
-  caseBody <- uPTm caseBody
-  put (ind, True)
-  pure $ indent t ind ++ "(" ++ intercalate "," caseOn ++ ") => " ++ caseBody ++ "\n"
+-- uCase :: Case -> Indent String
+-- uCase (Case {caseOn, caseBody}) = do
+--   (ind, t) <- get
+--   put (ind, False)
+--   caseOn <- mapM uPTm caseOn
+--   caseBody <- uPTm caseBody
+--   put (ind, True)
+--   pure $ indent t ind ++ "(" ++ intercalate "," caseOn ++ ") => " ++ caseBody ++ "\n"
 
-indent :: Bool -> Int -> String
-indent b n = if b then replicate n '\t' else ""
+-- indent :: Bool -> Int -> String
+-- indent b n = if b then replicate n '\t' else ""

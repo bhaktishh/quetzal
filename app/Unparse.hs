@@ -120,11 +120,29 @@ uTm (ITmBool b) = do
   put (ind, False)
   pure $ indent t ind ++ show b
 uTm (ITmPlus n1 n2) = do
+  (ind, t) <- get
+  put (ind, False)
+  t1 <- uTm n1
+  t2 <- uTm n2
+  pure $ indent t ind ++ "(" ++ (if n1 == ITmNat 1 then "S " else t1 ++ " + ") ++ t2 ++ ")"
+uTm (ITmMinus n1 n2) = do
   t1 <- uTm n1
   t2 <- uTm n2
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ "(" ++ (if n1 == ITmNat 1 then "S " else t1 ++ " + ") ++ t2 ++ ")"
+  pure $ indent t ind ++ "(" ++ t1 ++ " - " ++ t2 ++ ")"
+uTm (ITmBEq n1 n2) = do
+  t1 <- uTm n1
+  t2 <- uTm n2
+  (ind, t) <- get
+  put (ind, False)
+  pure $ indent t ind ++ "(" ++ t1 ++ " == " ++ t2 ++ ")"
+uTm (ITmBLT n1 n2) = do
+  t1 <- uTm n1
+  t2 <- uTm n2
+  (ind, t) <- get
+  put (ind, False)
+  pure $ indent t ind ++ "(" ++ t1 ++ " < " ++ t2 ++ ")"
 uTm (ITmVar v) = do
   (ind, t) <- get
   put (ind, False)

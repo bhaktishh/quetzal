@@ -1,7 +1,8 @@
-func testLoop (Bool n) of Nat {
-    while (n) {
-        n = True;
-        n = False;
+func testLoop (Nat n) of Nat {
+    let Nat x = 11;
+    while (n < 10) {
+        n = n + 4;
     }
-    return 1;
+    n = n + 1;
+    return n;
 }

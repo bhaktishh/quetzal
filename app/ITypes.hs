@@ -16,6 +16,9 @@ data ITy
 data ITm
   = ITmNat Nat
   | ITmPlus ITm ITm
+  | ITmMinus ITm ITm 
+  | ITmBEq ITm ITm 
+  | ITmBLT ITm ITm 
   | ITmBool Bool
   | ITmUnit
   | ITmNot ITm
