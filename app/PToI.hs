@@ -153,6 +153,8 @@ getLoopStmt (x : xs) hdr tl = case x of
   While {condition, body} -> Just (hdr, condition, body, xs ++ tl)
   _ -> getLoopStmt xs (hdr ++ [x]) []
 
+
+-- need to pass header vars into inner function !!!
 unLoopFunc :: Func -> IFunc
 unLoopFunc
   f@( Func
@@ -165,32 +167,32 @@ unLoopFunc
     PTmBlock stmts tm -> case getLoopStmt stmts [] [] of
       Nothing -> trFunc f
       Just (hdr, condition, body, tl) ->
-        let (outer, innerName) = defOuter hdr tl funcName funcArgs funcRetTy tm
-            inner = defInner condition tm body innerName funcArgs funcRetTy 
+        let (outer, innerName) = defOuter hdr funcName funcArgs funcRetTy
+            inner = defInner condition tm body innerName funcArgs funcRetTy tl 
             in 
               (unLoopFunc outer) {iWhere = [ITmFunc (unLoopFunc inner)]}
+    PTmFunc g -> unLoopFunc g
     _ -> trFunc f 
 
 -- the inner function needs to return all updated variables so any updates can be reflected in the outer function 
 -- or all the tail statements need to be part of the inner function 
-defOuter :: List Stmt -> List Stmt -> String -> List AnnParam -> PTy -> PTm -> (Func, String)
-defOuter hdr tl funcName funcArgs funcRetTy retTm =
+defOuter :: List Stmt -> String -> List AnnParam -> PTy -> (Func, String)
+defOuter hdr funcName funcArgs funcRetTy =
   let funcInner = funcName ++ "_rec"
-      recLet = DeclAssign funcRetTy (funcName ++ "_recVal") (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) funcArgs))
   in 
     (Func
         { funcName,
           funcArgs,
           funcRetTy,
-          funcBody = PTmBlock (hdr ++ [recLet] ++ tl ) retTm
+          funcBody = PTmBlock hdr (PTmReturn (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) funcArgs)))
         }, funcInner)
 
-defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> PTy -> Func
-defInner condition tl body fname params retty = Func
+defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> PTy -> List Stmt -> Func
+defInner condition ret body fname params retty tl = Func
         { funcName = fname,
           funcArgs = params,
           funcRetTy = retty,
-          funcBody = PTmIf (PTmNot condition) tl (PTmBlock body (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) params)))
+          funcBody = PTmIf (PTmNot condition) (PTmBlock tl ret) (PTmBlock body (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) params)))
         }
 
 getAnnParamVar :: AnnParam -> String

@@ -4,5 +4,5 @@ func testLoop (Nat n) of Nat {
         n = n + 4;
     }
     n = n + 1;
-    return n;
+    return n + x;
 }
