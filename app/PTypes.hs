@@ -29,8 +29,8 @@ data PTm
   = PTmNat Nat
   | PTmPlus PTm PTm
   | PTmMinus PTm PTm
-  | PTmBEq PTm PTm 
-  | PTmBLT PTm PTm 
+  | PTmBEq PTm PTm
+  | PTmBLT PTm PTm
   | PTmBool Bool
   | PTmUnit
   | PTmNot PTm

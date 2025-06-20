@@ -16,9 +16,9 @@ data ITy
 data ITm
   = ITmNat Nat
   | ITmPlus ITm ITm
-  | ITmMinus ITm ITm 
-  | ITmBEq ITm ITm 
-  | ITmBLT ITm ITm 
+  | ITmMinus ITm ITm
+  | ITmBEq ITm ITm
+  | ITmBLT ITm ITm
   | ITmBool Bool
   | ITmUnit
   | ITmNot ITm
@@ -29,7 +29,7 @@ data ITm
   | ITmFuncCall ITm (List ITm)
   | ITmIf ITm ITm ITm
   | ITmMatch (List ITm) (List (List ITm, ITm))
-  | ITmLet String ITy ITm ITm 
+  | ITmLet String ITy ITm ITm
   deriving (Show, Eq)
 
 data IConstructor = IConstructor
