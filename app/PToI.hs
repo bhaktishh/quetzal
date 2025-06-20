@@ -168,31 +168,40 @@ unLoopFunc
       Nothing -> trFunc f
       Just (hdr, condition, body, tl) ->
         let (outer, innerName) = defOuter hdr funcName funcArgs funcRetTy
-            inner = defInner condition tm body innerName funcArgs funcRetTy tl 
+            inner = defInner condition tm body innerName funcArgs funcRetTy tl hdr
             in 
               (unLoopFunc outer) {iWhere = [ITmFunc (unLoopFunc inner)]}
     PTmFunc g -> unLoopFunc g
     _ -> trFunc f 
+
+getHVars :: List Stmt -> List AnnParam
+getHVars [] = []
+getHVars (x:xs) = case x of 
+  DeclAssign ty v _ -> AnnParam (ty, v) True : getHVars xs 
+  Assign _ _ -> error "assignment should have been transformed"
+  While {condition, body} -> getHVars xs -- TODO 
 
 -- the inner function needs to return all updated variables so any updates can be reflected in the outer function 
 -- or all the tail statements need to be part of the inner function 
 defOuter :: List Stmt -> String -> List AnnParam -> PTy -> (Func, String)
 defOuter hdr funcName funcArgs funcRetTy =
   let funcInner = funcName ++ "_rec"
+      vars = getHVars hdr 
   in 
     (Func
         { funcName,
-          funcArgs,
+          funcArgs = funcArgs,
           funcRetTy,
-          funcBody = PTmBlock hdr (PTmReturn (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) funcArgs)))
+          funcBody = PTmBlock hdr (PTmReturn (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) (funcArgs ++ vars))))
         }, funcInner)
 
-defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> PTy -> List Stmt -> Func
-defInner condition ret body fname params retty tl = Func
+defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> PTy -> List Stmt -> List Stmt -> Func
+defInner condition ret body fname params retty tl hdr = let ps = params ++ getHVars hdr in 
+  Func
         { funcName = fname,
-          funcArgs = params,
+          funcArgs = ps,
           funcRetTy = retty,
-          funcBody = PTmIf (PTmNot condition) (PTmBlock tl ret) (PTmBlock body (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) params)))
+          funcBody = PTmIf (PTmNot condition) (PTmBlock tl ret) (PTmBlock body (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps)))
         }
 
 getAnnParamVar :: AnnParam -> String
