@@ -1,7 +1,8 @@
 testLoop : (n : Nat) -> Nat
 testLoop n = 
 	let x : Nat = 11 in
-		(testLoop_rec n x)
+		let x : Nat = 12 in
+			(testLoop_rec n x)
 where 
 	testLoop_rec : (n : Nat) -> (x : Nat) -> Nat
 	testLoop_rec n x = 

@@ -1,5 +1,6 @@
 func testLoop (Nat n) of Nat {
     let Nat x = 11;
+    x = 12; 
     while (n < 10) {
         n = n + 4;
     }

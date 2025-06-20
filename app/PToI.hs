@@ -174,19 +174,19 @@ unLoopFunc
     PTmFunc g -> unLoopFunc g
     _ -> trFunc f 
 
-getHVars :: List Stmt -> List AnnParam
-getHVars [] = []
-getHVars (x:xs) = case x of 
-  DeclAssign ty v _ -> AnnParam (ty, v) True : getHVars xs 
+getHVars :: List Stmt -> M.Map String PTy -> List AnnParam
+getHVars [] m = map (\(v, ty) -> AnnParam (ty, v) True) (M.toList m)
+getHVars (x:xs) m = case x of 
+  DeclAssign ty v _ -> getHVars xs (M.insert v ty m)
   Assign _ _ -> error "assignment should have been transformed"
-  While {condition, body} -> getHVars xs -- TODO 
+  While {condition, body} -> getHVars xs m -- TODO 
 
 -- the inner function needs to return all updated variables so any updates can be reflected in the outer function 
 -- or all the tail statements need to be part of the inner function 
 defOuter :: List Stmt -> String -> List AnnParam -> PTy -> (Func, String)
 defOuter hdr funcName funcArgs funcRetTy =
   let funcInner = funcName ++ "_rec"
-      vars = getHVars hdr 
+      vars = getHVars hdr M.empty
   in 
     (Func
         { funcName,
@@ -196,7 +196,7 @@ defOuter hdr funcName funcArgs funcRetTy =
         }, funcInner)
 
 defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> PTy -> List Stmt -> List Stmt -> Func
-defInner condition ret body fname params retty tl hdr = let ps = params ++ getHVars hdr in 
+defInner condition ret body fname params retty tl hdr = let ps = params ++ getHVars hdr M.empty in 
   Func
         { funcName = fname,
           funcArgs = ps,
