@@ -153,7 +153,6 @@ getLoopStmt (x : xs) hdr tl = case x of
   While {condition, body} -> Just (hdr, condition, body, xs ++ tl)
   _ -> getLoopStmt xs (hdr ++ [x]) []
 
-
 -- need to pass header vars into inner function !!!
 unLoopFunc :: Func -> IFunc
 unLoopFunc
@@ -169,35 +168,34 @@ unLoopFunc
       Just (hdr, condition, body, tl) ->
         let (outer, innerName) = defOuter hdr funcName funcArgs funcRetTy
             inner = defInner condition tm body innerName funcArgs funcRetTy tl hdr
-            in 
-              (unLoopFunc outer) {iWhere = [ITmFunc (unLoopFunc inner)]}
+         in (unLoopFunc outer) {iWhere = [ITmFunc (unLoopFunc inner)]}
     PTmFunc g -> unLoopFunc g
-    _ -> trFunc f 
+    _ -> trFunc f
 
 getHVars :: List Stmt -> M.Map String PTy -> List AnnParam
 getHVars [] m = map (\(v, ty) -> AnnParam (ty, v) True) (M.toList m)
-getHVars (x:xs) m = case x of 
+getHVars (x : xs) m = case x of
   DeclAssign ty v _ -> getHVars xs (M.insert v ty m)
   Assign _ _ -> error "assignment should have been transformed"
-  While {condition, body} -> getHVars xs m -- TODO 
+  While {condition, body} -> getHVars xs m -- TODO
 
--- the inner function needs to return all updated variables so any updates can be reflected in the outer function 
--- or all the tail statements need to be part of the inner function 
 defOuter :: List Stmt -> String -> List AnnParam -> PTy -> (Func, String)
 defOuter hdr funcName funcArgs funcRetTy =
   let funcInner = funcName ++ "_rec"
       vars = getHVars hdr M.empty
-  in 
-    (Func
-        { funcName,
-          funcArgs = funcArgs,
-          funcRetTy,
-          funcBody = PTmBlock hdr (PTmReturn (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) (funcArgs ++ vars))))
-        }, funcInner)
+   in ( Func
+          { funcName,
+            funcArgs = funcArgs,
+            funcRetTy,
+            funcBody = PTmBlock hdr (PTmReturn (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) (funcArgs ++ vars))))
+          },
+        funcInner
+      )
 
 defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> PTy -> List Stmt -> List Stmt -> Func
-defInner condition ret body fname params retty tl hdr = let ps = params ++ getHVars hdr M.empty in 
-  Func
+defInner condition ret body fname params retty tl hdr =
+  let ps = params ++ getHVars hdr M.empty
+   in Func
         { funcName = fname,
           funcArgs = ps,
           funcRetTy = retty,
