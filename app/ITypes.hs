@@ -12,6 +12,7 @@ data ITy
   | ITyCustom String (List ITm)
   | ITyList ITy
   | ITyTm ITm
+  | ITyHole 
   deriving (Show, Eq)
 
 data ITm

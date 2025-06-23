@@ -24,8 +24,8 @@ func append<Nat n, Nat m, Ty t> (Vect(t, n) v1, Vect(t, m) v2) of Vect(t, n+m) {
             return v2;
         }
         case (Cons(x, xs), v2) {
-            v2 = append(xs, v2);
-            return Cons(x, v2);
+            let v3 = append(xs, v2);
+            return Cons(x, v3);
         }   
     }
 }
@@ -42,6 +42,7 @@ func testLoop (Nat n) of Nat {
     x = 12; 
     if (x < 10) {
         while (n < 10) {
+            x = x + 1;
             n = n + 4;
         }
         n = n + 1;
@@ -51,4 +52,16 @@ func testLoop (Nat n) of Nat {
         n = n + 2; 
         return n + 4;
     }
+}
+
+func test2Loops (Nat n) of Nat {
+    let Nat x = 11; 
+    while (n < x) {
+        n = n + 1; 
+    }
+    let Nat y = 12;
+    while (n < 20) {
+        n = n + 1;
+    }
+    return n;
 }

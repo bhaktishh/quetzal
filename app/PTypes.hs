@@ -24,6 +24,7 @@ data PTy
       }
   | PTyList PTy
   | PTyPTm PTm
+  | PTyHole 
   deriving (Show, Eq)
 
 data PTm

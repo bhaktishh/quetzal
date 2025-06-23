@@ -219,8 +219,7 @@ pAssign = do
 pDeclAssign :: Parser Stmt
 pDeclAssign = do
   _ <- pSpaces $ string "let"
-  ty <- optional (pSpaces pPTy)
-  var <- pSpaces pLowerStr
+  (ty, var) <- try ((,) <$> optional (pSpaces pPTy) <*> pSpaces pLowerStr) <|> (,) Nothing <$> pSpaces pLowerStr
   _ <- pSpaces $ char '='
   rhs <- pSpaces pPTm0
   _ <- pSpaces $ char ';'
@@ -334,7 +333,7 @@ pCase = do
       }
 
 pPTyPTm :: Parser PTy
-pPTyPTm = PTyPTm <$> pPTm
+pPTyPTm = PTyPTm <$> pPTm0
 
 pPTmPTy :: Parser PTm
 pPTmPTy = PTmPTy <$> pPTy
@@ -365,6 +364,9 @@ pPTyFunc = do
         tyFuncRetTy
       }
 
+pTyHole :: Parser PTy
+pTyHole = pSpaces (char '?') >> pure PTyHole 
+
 pPTy :: Parser PTy
 pPTy =
   try pPTyBool
@@ -375,6 +377,7 @@ pPTy =
     <|> try pPTyCustom
     <|> try pPTyPTm
     <|> try pPTyList
+    <|> try pTyHole 
 
 pPTm0 :: Parser PTm
 pPTm0 =

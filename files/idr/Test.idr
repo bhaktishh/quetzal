@@ -28,8 +28,8 @@ append : {n : Nat} -> {m : Nat} -> {t : Type} -> (v1 : Vect t n) -> (v2 : Vect t
 append v1 v2 = 
 	case (v1,v2) of
 		((Nil),v2) => v2
-		((Cons x xs),v2) => let v2 = (append xs v2) in
-			(Cons x v2)
+		((Cons x xs),v2) => let v3 = (append xs v2) in
+			(Cons x v3)
 
 replicate : {t : Type} -> (x : t) -> (n : Nat) -> Vect t n
 replicate x n = 
@@ -42,17 +42,17 @@ testLoop n =
 	let x : Nat = 11 in
 		let x = 12 in
 			if (x < 10) then 
-				(testLoop_rec n)
+				(testLoop_rec0 n)
 			else 
 				let n = (n + 2) in
 					(n + 4)
 where 
-	testLoop_rec : (n : Nat) -> Nat
-	testLoop_rec n = 
+	testLoop_rec0 : (n : Nat) -> Nat
+	testLoop_rec0 n = 
 		if not (n < 10) then 
 			let n = (n + 1) in
 				n
 		else 
 			let n = (n + 4) in
-				(testLoop_rec n)
+				(testLoop_rec0 n)
 

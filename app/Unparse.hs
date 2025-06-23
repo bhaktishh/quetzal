@@ -106,6 +106,7 @@ uTy (ITyFunc args) = do
   pure $ intercalate " -> " args
 uTy (ITyTm t) = uTm t
 uTy (ITyList t) = (++) "List " <$> uTy t
+uTy ITyHole = pure $ "?"
 
 uFuncArg :: (Maybe String, ITy) -> Indent String
 uFuncArg (Nothing, ty) = uTy ty
@@ -223,8 +224,11 @@ uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
   args <- mapM (uAnnParam True) iFuncArgs
   put (ind + 1, True)
   body <- uTm iFuncBody
-  put (ind + 1, True)
-  deps <- mapM uTm iWhere
+  put (ind, False)
+  deps <- mapM (\i -> do 
+    (ind, t) <- get 
+    put (ind + 1, True)
+    uTm i) iWhere
   put (ind, False)
   pure $
     indent t ind
@@ -244,4 +248,4 @@ uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
         else
           indent t ind
             ++ "\nwhere \n"
-            ++ intercalate "\n" deps
+            ++ intercalate "\n where \n" deps
