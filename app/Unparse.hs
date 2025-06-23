@@ -72,7 +72,7 @@ uTyDecl
         ++ iTyDeclName
         ++ " : "
         ++ concat params
-        ++ "PType where \n"
+        ++ "Type where \n"
         ++ concat constructors
 
 uTyDeclConstructor :: IConstructor -> Indent String
@@ -96,7 +96,7 @@ uAnnParam arrow (IAnnParam (var, ty) vis) = do
 uTy :: ITy -> Indent String
 uTy ITyNat = pure "Nat"
 uTy ITyBool = pure "Bool"
-uTy ITyTy = pure "PType"
+uTy ITyTy = pure "Type"
 uTy ITyUnit = pure "()"
 uTy (ITyCustom name params) = do
   params <- mapM uTm params
@@ -169,7 +169,9 @@ uTm (ITmIf cond thenCase elseCase) = do
   elseCase <- uTm elseCase
   put (ind, False)
   pure $ indent t ind ++ "if " ++ cond ++ " then \n" ++ thenCase ++ "\n" ++ indent t ind ++ "else \n" ++ elseCase
-uTm ITmUnit = pure "()"
+uTm ITmUnit = do 
+  (ind, t) <- get 
+  pure $ indent t ind ++ "()"
 uTm (ITmTy t) = do
   (ind, _) <- get
   put (ind, False)
@@ -180,7 +182,16 @@ uTm (ITmNot tm) = do
   put (ind, False)
   tm <- uTm tm
   pure $ indent t ind ++ "not " ++ tm
-uTm (ITmLet v ty val body) = do
+uTm (ITmLet v Nothing val body) = do
+  (ind, t) <- get
+  put (ind, False)
+  tm <- uTm val
+  put (ind + 1, True)
+  b <- uTm body
+  put (ind, False)
+  pure $ indent t ind ++ "let " ++ v ++ " = " ++ tm ++ " in\n" ++ b
+
+uTm (ITmLet v (Just ty) val body) = do
   (ind, t) <- get
   put (ind, False)
   ty <- uTy ty
@@ -189,7 +200,20 @@ uTm (ITmLet v ty val body) = do
   b <- uTm body
   put (ind, False)
   pure $ indent t ind ++ "let " ++ v ++ " : " ++ ty ++ " = " ++ tm ++ " in\n" ++ b
-uTm (ITmMatch on cases) = undefined
+uTm (ITmMatch on cases) = do 
+  (ind, t) <- get
+  put (ind, False)
+  on <- mapM uTm on 
+  put (ind + 1, True)
+  cases <- mapM (\(xs, v) -> do 
+    (ind, t) <- get 
+    put (ind, False)
+    xs <- mapM uTm xs
+    v <- uTm v
+    pure (xs, v)) cases 
+  put (ind, False)
+  pure $ indent t ind ++ "case " ++ "(" ++ intercalate "," on ++ ")" ++ " of\n" 
+    ++ indent t (ind + 1) ++ intercalate ("\n" ++ indent t (ind + 1)) (map (\(xs, tm) -> "(" ++ intercalate "," xs ++ ")" ++ " => " ++ tm) cases)
 
 uFuncs :: IFunc -> Indent String
 uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do

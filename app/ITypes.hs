@@ -10,7 +10,7 @@ data ITy
   | ITyTy
   | ITyFunc (List (Maybe String, ITy))
   | ITyCustom String (List ITm)
-  | ITyList ITy 
+  | ITyList ITy
   | ITyTm ITm
   deriving (Show, Eq)
 
@@ -30,7 +30,7 @@ data ITm
   | ITmFuncCall ITm (List ITm)
   | ITmIf ITm ITm ITm
   | ITmMatch (List ITm) (List (List ITm, ITm))
-  | ITmLet String ITy ITm ITm
+  | ITmLet String (Maybe ITy) ITm ITm
   deriving (Show, Eq)
 
 data IConstructor = IConstructor

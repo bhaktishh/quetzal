@@ -59,7 +59,7 @@ data Case = Case
   deriving (Show, Eq)
 
 data Stmt
-  = DeclAssign PTy String PTm
+  = DeclAssign (Maybe PTy) String PTm
   | Assign String PTm
   | While
       { condition :: PTm,

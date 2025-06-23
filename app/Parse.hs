@@ -9,6 +9,7 @@ import Text.Megaparsec
   ( MonadParsec (eof, try),
     Parsec,
     many,
+    optional,
     parse,
     sepBy,
     some,
@@ -106,7 +107,7 @@ pFuncArgs =
     <|> pure []
 
 pTmUnit :: Parser PTm
-pTmUnit = pSpaces $ string "()" >> pure PTmUnit 
+pTmUnit = pSpaces $ string "()" >> pure PTmUnit
 
 pVarStr :: Parser String
 pVarStr = (:) <$> letterChar <*> many (alphaNumChar <|> char '_')
@@ -181,7 +182,7 @@ pRecDeclField = do
 pPTyBool :: Parser PTy
 pPTyBool = string "Bool" >> pure PTyBool
 
-pPTyList :: Parser PTy 
+pPTyList :: Parser PTy
 pPTyList = PTyList <$> (string "List" >> pPTy)
 
 pBool :: Parser PTm
@@ -202,7 +203,7 @@ pPTyNat :: Parser PTy
 pPTyNat = string "Nat" >> pure PTyNat
 
 pPTyTy :: Parser PTy
-pPTyTy = string "PTy" >> pure PTyTy
+pPTyTy = string "Ty" >> pure PTyTy
 
 pPTyUnit :: Parser PTy
 pPTyUnit = string "Void" >> pure PTyUnit
@@ -218,8 +219,7 @@ pAssign = do
 pDeclAssign :: Parser Stmt
 pDeclAssign = do
   _ <- pSpaces $ string "let"
-  ty <- pSpaces pPTy -- this is reachable from pPTm which is reachable from pPTy
-  -- add syntax in front of decl to remove LR
+  ty <- optional (pSpaces pPTy)
   var <- pSpaces pLowerStr
   _ <- pSpaces $ char '='
   rhs <- pSpaces pPTm0
@@ -386,7 +386,7 @@ pPTm0 =
     <|> try pFuncCall
     <|> try pPTmCon
     <|> try pPTmSwitch
-    <|> try pIf 
+    <|> try pIf
     <|> try pPTm1
 
 pPTm1 :: Parser PTm

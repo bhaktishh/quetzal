@@ -40,9 +40,15 @@ func replicate<Ty t>(t x, Nat n) of Vect(t, n) {
 func testLoop (Nat n) of Nat {
     let Nat x = 11;
     x = 12; 
-    while (n < 10) {
-        n = n + 4;
+    if (x < 10) {
+        while (n < 10) {
+            n = n + 4;
+        }
+        n = n + 1;
+        return n;
     }
-    n = n + 1;
-    return n + x;
+    else {
+        n = n + 2; 
+        return n + 4;
+    }
 }

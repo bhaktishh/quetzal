@@ -4,6 +4,8 @@ module PToI where
 
 import Data.List (nub)
 import qualified Data.Map as M
+import Data.Maybe (fromJust)
+import Data.Tuple (swap)
 import ITypes
 import PTypes
 
@@ -28,7 +30,8 @@ trTm (PTmBLT t1 t2) = ITmBLT (trTm t1) (trTm t2)
 
 trStmt :: List Stmt -> ITm -> ITm
 trStmt [] tm = tm
-trStmt (DeclAssign ty v tm : xs) tm2 = ITmLet v (trTy ty) (trTm tm) (trStmt xs tm2)
+trStmt (DeclAssign (Just ty) v tm : xs) tm2 = ITmLet v (Just (trTy ty)) (trTm tm) (trStmt xs tm2)
+trStmt (DeclAssign Nothing v tm : xs) tm2 = ITmLet v Nothing (trTm tm) (trStmt xs tm2)
 trStmt stmts _ = error $ "should be transformed, " ++ show stmts
 
 trTy :: PTy -> ITy
@@ -124,7 +127,7 @@ doShadowing f =
    in f {funcBody = doPTms (M.fromList (map (\(AnnParam (t, v) _) -> (v, t)) (funcArgs f))) tm}
 
 doPTms :: M.Map String PTy -> PTm -> PTm
-doPTms m (PTmBlock stmts tm) = PTmBlock (doStmts m stmts) (doPTms m tm)
+doPTms m (PTmBlock stmts tm) = PTmBlock (doStmts stmts) (doPTms m tm)
 doPTms m (PTmPlus t1 t2) = PTmPlus (doPTms m t1) (doPTms m t2)
 doPTms m (PTmMinus t1 t2) = PTmMinus (doPTms m t1) (doPTms m t2)
 doPTms m (PTmBEq t1 t2) = PTmBEq (doPTms m t1) (doPTms m t2)
@@ -143,14 +146,21 @@ doPTms m (PTmSwitch s) =
       }
 doPTms _ tm = tm
 
-doStmts :: M.Map String PTy -> List Stmt -> List Stmt
-doStmts _ [] = []
-doStmts vars (x : xs) = case x of
-  Assign var tm -> case M.lookup var vars of
-    Nothing -> error "assign before declare"
-    Just ty -> DeclAssign ty var tm : doStmts vars xs
-  DeclAssign ty var tm -> DeclAssign ty var tm : doStmts (M.insert var ty vars) xs
-  While {condition, body} -> While {condition, body = doStmts vars body} : doStmts vars xs
+doStmts :: List Stmt -> List Stmt
+doStmts [] = []
+doStmts (x : xs) = case x of
+  Assign var tm -> DeclAssign Nothing var tm : doStmts xs
+  DeclAssign ty var tm -> DeclAssign ty var tm : doStmts xs
+  While {condition, body} -> While {condition, body = doStmts body} : doStmts xs
+
+-- doStmts :: M.Map String PTy -> List Stmt -> List Stmt
+-- doStmts _ [] = []
+-- doStmts vars (x : xs) = case x of
+--   Assign var tm -> case M.lookup var vars of
+--     Nothing -> error "assign before declare"
+--     Just ty -> DeclAssign Nothing var tm : doStmts vars xs
+--   DeclAssign ty var tm -> DeclAssign ty var tm : doStmts (M.insert var ty vars) xs
+--   While {condition, body} -> While {condition, body = doStmts vars body} : doStmts vars xs
 
 -- only works for one loop stmt currently
 getLoopStmt :: List Stmt -> List Stmt -> List Stmt -> Maybe (List Stmt, PTm, List Stmt, List Stmt)
@@ -172,16 +182,6 @@ unLoopFunc
         fNew = f {funcBody = body}
      in (trFunc fNew) {iWhere = map (ITmFunc . trFunc) inner}
 
---   ) = case funcBody of
--- PTmBlock stmts tm -> case getLoopStmt stmts [] [] of
---   Nothing -> trFunc f
---   Just (hdr, condition, body, tl) ->
---     let (outer, innerName) = defOuter hdr funcName funcArgs funcRetTy
---         inner = defInner condition tm body innerName funcArgs funcRetTy tl hdr
---      in (unLoopFunc outer) {iWhere = [ITmFunc (unLoopFunc inner)]}
--- PTmFunc g -> unLoopFunc g
--- _ -> trFunc f
-
 unLoopTm :: String -> List AnnParam -> PTy -> PTm -> List Func -> (PTm, List Func)
 unLoopTm fname fparams fretty tm innerFuncs = case tm of
   PTmBlock stmts tm -> case getLoopStmt stmts [] [] of
@@ -189,7 +189,7 @@ unLoopTm fname fparams fretty tm innerFuncs = case tm of
       let (newTm, newInner) = unLoopTm fname fparams fretty tm innerFuncs
        in (PTmBlock stmts newTm, innerFuncs ++ newInner)
     Just (hdr, condition, body, tl) ->
-      let (outer, innerName) = defOuter hdr fname fparams fretty
+      let (outer, innerName) = defOuter hdr fname fparams
           inner = defInner condition tm body innerName fparams fretty tl hdr
        in (outer, inner : innerFuncs)
   PTmPlus tm1_ tm2_ ->
@@ -218,24 +218,24 @@ unLoopTm fname fparams fretty tm innerFuncs = case tm of
      in (PTmIf tm1 tm2 tm3, nub (innerFuncs ++ tm1_inner ++ tm2_inner ++ tm3_inner))
   _ -> (tm, innerFuncs)
 
-getHVars :: List Stmt -> M.Map String PTy -> List AnnParam
-getHVars [] m = map (\(v, ty) -> AnnParam (ty, v) True) (M.toList m)
+getHVars :: List Stmt -> M.Map String (Maybe PTy) -> List (String, Maybe PTy)
+getHVars [] m = M.toList m
 getHVars (x : xs) m = case x of
   DeclAssign ty v _ -> getHVars xs (M.insert v ty m)
   Assign _ _ -> error "assignment should have been transformed"
   While {condition, body} -> getHVars xs m -- TODO
 
-defOuter :: List Stmt -> String -> List AnnParam -> PTy -> (PTm, String)
-defOuter hdr funcName funcArgs funcRetTy =
+defOuter :: List Stmt -> String -> List AnnParam -> (PTm, String)
+defOuter hdr funcName funcArgs =
   let funcInner = funcName ++ "_rec"
       vars = getHVars hdr M.empty
-   in ( PTmBlock hdr (PTmReturn (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) (funcArgs ++ vars)))),
+   in ( PTmBlock hdr (PTmReturn (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) funcArgs ++ map (PTmVar . fst) vars))),
         funcInner
       )
 
 defInner :: PTm -> PTm -> List Stmt -> String -> List AnnParam -> PTy -> List Stmt -> List Stmt -> Func
 defInner condition ret body fname params retty tl hdr =
-  let ps = params ++ getHVars hdr M.empty
+  let ps = params ++ map (\(v, ty) -> AnnParam (fromJust ty, v) True) (getHVars hdr M.empty)
    in Func
         { funcName = fname,
           funcArgs = ps,
