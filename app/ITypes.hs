@@ -10,6 +10,7 @@ data ITy
   | ITyTy
   | ITyFunc (List (Maybe String, ITy))
   | ITyCustom String (List ITm)
+  | ITyList ITy 
   | ITyTm ITm
   deriving (Show, Eq)
 

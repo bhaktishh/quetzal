@@ -22,6 +22,7 @@ data PTy
       { tyName :: String,
         tyParams :: List PTm
       }
+  | PTyList PTy
   | PTyPTm PTm
   deriving (Show, Eq)
 

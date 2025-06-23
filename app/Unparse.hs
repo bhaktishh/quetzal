@@ -105,6 +105,7 @@ uTy (ITyFunc args) = do
   args <- mapM uFuncArg args
   pure $ intercalate " -> " args
 uTy (ITyTm t) = uTm t
+uTy (ITyList t) = (++) "List " <$> uTy t
 
 uFuncArg :: (Maybe String, ITy) -> Indent String
 uFuncArg (Nothing, ty) = uTy ty

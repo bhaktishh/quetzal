@@ -2,6 +2,7 @@
 
 module PToI where
 
+import Data.List (nub)
 import qualified Data.Map as M
 import ITypes
 import PTypes
@@ -19,7 +20,7 @@ trTm (PTmFunc f) = ITmFunc $ unLoopFunc f
 trTm (PTmFuncCall f args) = ITmFuncCall (trTm f) (map trTm args)
 trTm (PTmBlock xs t) = trStmt xs (trTm t)
 trTm (PTmIf c t e) = ITmIf (trTm c) (trTm t) (trTm e)
-trTm (PTmReturn t) = trTm t -- todo
+trTm (PTmReturn t) = trTm t
 trTm (PTmSwitch s) = trSwitch s
 trTm (PTmMinus t1 t2) = ITmMinus (trTm t1) (trTm t2)
 trTm (PTmBEq t1 t2) = ITmBEq (trTm t1) (trTm t2)
@@ -28,7 +29,7 @@ trTm (PTmBLT t1 t2) = ITmBLT (trTm t1) (trTm t2)
 trStmt :: List Stmt -> ITm -> ITm
 trStmt [] tm = tm
 trStmt (DeclAssign ty v tm : xs) tm2 = ITmLet v (trTy ty) (trTm tm) (trStmt xs tm2)
-trStmt _ _ = error "should be transformed"
+trStmt stmts _ = error $ "should be transformed, " ++ show stmts
 
 trTy :: PTy -> ITy
 trTy PTyNat = ITyNat
@@ -38,6 +39,7 @@ trTy PTyTy = ITyTy
 trTy PTyFunc {tyFuncArgs, tyFuncRetTy} = ITyFunc $ map (\(x, y) -> (Just y, trTy x)) tyFuncArgs ++ [(Nothing, trTy tyFuncRetTy)]
 trTy PTyCustom {tyName, tyParams} = ITyCustom tyName (map trTm tyParams)
 trTy (PTyPTm t) = ITyTm (trTm t)
+trTy (PTyList t) = ITyList (trTy t)
 
 trSwitch :: Switch -> ITm
 trSwitch Switch {switchOn, cases} =
@@ -122,8 +124,12 @@ doShadowing f =
    in f {funcBody = doPTms (M.fromList (map (\(AnnParam (t, v) _) -> (v, t)) (funcArgs f))) tm}
 
 doPTms :: M.Map String PTy -> PTm -> PTm
-doPTms m (PTmBlock stmts tm) = PTmBlock (doStmts m stmts) tm
+doPTms m (PTmBlock stmts tm) = PTmBlock (doStmts m stmts) (doPTms m tm)
 doPTms m (PTmPlus t1 t2) = PTmPlus (doPTms m t1) (doPTms m t2)
+doPTms m (PTmMinus t1 t2) = PTmMinus (doPTms m t1) (doPTms m t2)
+doPTms m (PTmBEq t1 t2) = PTmBEq (doPTms m t1) (doPTms m t2)
+doPTms m (PTmBLT t1 t2) = PTmBLT (doPTms m t1) (doPTms m t2)
+doPTms m (PTmNot t1) = PTmNot (doPTms m t1)
 doPTms m (PTmCon v tms) = PTmCon v (map (doPTms m) tms)
 doPTms m (PTmFunc f) = PTmFunc f {funcBody = doPTms m (funcBody f)}
 doPTms m (PTmFuncCall t ts) = PTmFuncCall (doPTms m t) (map (doPTms m) ts)
@@ -153,7 +159,6 @@ getLoopStmt (x : xs) hdr tl = case x of
   While {condition, body} -> Just (hdr, condition, body, xs ++ tl)
   _ -> getLoopStmt xs (hdr ++ [x]) []
 
--- need to pass header vars into inner function !!!
 unLoopFunc :: Func -> IFunc
 unLoopFunc
   f@( Func
@@ -162,15 +167,56 @@ unLoopFunc
           funcArgs,
           funcBody
         }
-      ) = case funcBody of
-    PTmBlock stmts tm -> case getLoopStmt stmts [] [] of
-      Nothing -> trFunc f
-      Just (hdr, condition, body, tl) ->
-        let (outer, innerName) = defOuter hdr funcName funcArgs funcRetTy
-            inner = defInner condition tm body innerName funcArgs funcRetTy tl hdr
-         in (unLoopFunc outer) {iWhere = [ITmFunc (unLoopFunc inner)]}
-    PTmFunc g -> unLoopFunc g
-    _ -> trFunc f
+      ) =
+    let (body, inner) = unLoopTm funcName funcArgs funcRetTy funcBody []
+        fNew = f {funcBody = body}
+     in (trFunc fNew) {iWhere = map (ITmFunc . trFunc) inner}
+
+--   ) = case funcBody of
+-- PTmBlock stmts tm -> case getLoopStmt stmts [] [] of
+--   Nothing -> trFunc f
+--   Just (hdr, condition, body, tl) ->
+--     let (outer, innerName) = defOuter hdr funcName funcArgs funcRetTy
+--         inner = defInner condition tm body innerName funcArgs funcRetTy tl hdr
+--      in (unLoopFunc outer) {iWhere = [ITmFunc (unLoopFunc inner)]}
+-- PTmFunc g -> unLoopFunc g
+-- _ -> trFunc f
+
+unLoopTm :: String -> List AnnParam -> PTy -> PTm -> List Func -> (PTm, List Func)
+unLoopTm fname fparams fretty tm innerFuncs = case tm of
+  PTmBlock stmts tm -> case getLoopStmt stmts [] [] of
+    Nothing ->
+      let (newTm, newInner) = unLoopTm fname fparams fretty tm innerFuncs
+       in (PTmBlock stmts newTm, innerFuncs ++ newInner)
+    Just (hdr, condition, body, tl) ->
+      let (outer, innerName) = defOuter hdr fname fparams fretty
+          inner = defInner condition tm body innerName fparams fretty tl hdr
+       in (outer, inner : innerFuncs)
+  PTmPlus tm1_ tm2_ ->
+    let (tm1, tm1_inner) = unLoopTm fname fparams fretty tm1_ innerFuncs
+        (tm2, tm2_inner) = unLoopTm fname fparams fretty tm2_ innerFuncs
+     in (PTmPlus tm1 tm2, nub (innerFuncs ++ tm1_inner ++ tm2_inner))
+  PTmMinus tm1_ tm2_ ->
+    let (tm1, tm1_inner) = unLoopTm fname fparams fretty tm1_ innerFuncs
+        (tm2, tm2_inner) = unLoopTm fname fparams fretty tm2_ innerFuncs
+     in (PTmMinus tm1 tm2, nub (innerFuncs ++ tm1_inner ++ tm2_inner))
+  PTmBEq tm1_ tm2_ ->
+    let (tm1, tm1_inner) = unLoopTm fname fparams fretty tm1_ innerFuncs
+        (tm2, tm2_inner) = unLoopTm fname fparams fretty tm2_ innerFuncs
+     in (PTmBEq tm1 tm2, nub (innerFuncs ++ tm1_inner ++ tm2_inner))
+  PTmBLT tm1_ tm2_ ->
+    let (tm1, tm1_inner) = unLoopTm fname fparams fretty tm1_ innerFuncs
+        (tm2, tm2_inner) = unLoopTm fname fparams fretty tm2_ innerFuncs
+     in (PTmBLT tm1 tm2, nub (innerFuncs ++ tm1_inner ++ tm2_inner))
+  PTmNot tm1_ ->
+    let (tm1, tm1_inner) = unLoopTm fname fparams fretty tm1_ innerFuncs
+     in (PTmNot tm1, nub (innerFuncs ++ tm1_inner))
+  PTmIf tm1_ tm2_ tm3_ ->
+    let (tm1, tm1_inner) = unLoopTm fname fparams fretty tm1_ innerFuncs
+        (tm2, tm2_inner) = unLoopTm fname fparams fretty tm2_ innerFuncs
+        (tm3, tm3_inner) = unLoopTm fname fparams fretty tm3_ innerFuncs
+     in (PTmIf tm1 tm2 tm3, nub (innerFuncs ++ tm1_inner ++ tm2_inner ++ tm3_inner))
+  _ -> (tm, innerFuncs)
 
 getHVars :: List Stmt -> M.Map String PTy -> List AnnParam
 getHVars [] m = map (\(v, ty) -> AnnParam (ty, v) True) (M.toList m)
@@ -179,16 +225,11 @@ getHVars (x : xs) m = case x of
   Assign _ _ -> error "assignment should have been transformed"
   While {condition, body} -> getHVars xs m -- TODO
 
-defOuter :: List Stmt -> String -> List AnnParam -> PTy -> (Func, String)
+defOuter :: List Stmt -> String -> List AnnParam -> PTy -> (PTm, String)
 defOuter hdr funcName funcArgs funcRetTy =
   let funcInner = funcName ++ "_rec"
       vars = getHVars hdr M.empty
-   in ( Func
-          { funcName,
-            funcArgs = funcArgs,
-            funcRetTy,
-            funcBody = PTmBlock hdr (PTmReturn (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) (funcArgs ++ vars))))
-          },
+   in ( PTmBlock hdr (PTmReturn (PTmFuncCall (PTmVar funcInner) (map (PTmVar . getAnnParamVar) (funcArgs ++ vars)))),
         funcInner
       )
 

@@ -94,7 +94,6 @@ pFunc = do
 mkAnnParam :: Bool -> (PTy, String) -> AnnParam
 mkAnnParam b x = AnnParam x b
 
--- if this tries to parse an empty string it loops, probably because it calls pPTy and keeps going
 pFuncArgs :: Parser (List (PTy, String))
 pFuncArgs =
   pSpaces
@@ -105,6 +104,9 @@ pFuncArgs =
     )
     `sepBy` char ','
     <|> pure []
+
+pTmUnit :: Parser PTm
+pTmUnit = pSpaces $ string "()" >> pure PTmUnit 
 
 pVarStr :: Parser String
 pVarStr = (:) <$> letterChar <*> many (alphaNumChar <|> char '_')
@@ -178,6 +180,9 @@ pRecDeclField = do
 
 pPTyBool :: Parser PTy
 pPTyBool = string "Bool" >> pure PTyBool
+
+pPTyList :: Parser PTy 
+pPTyList = PTyList <$> (string "List" >> pPTy)
 
 pBool :: Parser PTm
 pBool = pTrue <|> pFalse
@@ -369,6 +374,7 @@ pPTy =
     <|> try pPTyFunc
     <|> try pPTyCustom
     <|> try pPTyPTm
+    <|> try pPTyList
 
 pPTm0 :: Parser PTm
 pPTm0 =
@@ -380,6 +386,7 @@ pPTm0 =
     <|> try pFuncCall
     <|> try pPTmCon
     <|> try pPTmSwitch
+    <|> try pIf 
     <|> try pPTm1
 
 pPTm1 :: Parser PTm
@@ -388,6 +395,7 @@ pPTm1 =
     <|> try pPTmVar
     <|> pNat
     <|> pBool
+    <|> pTmUnit
 
 pPTm :: Parser PTm
 pPTm = try pPTmBlock <|> try pPTm0

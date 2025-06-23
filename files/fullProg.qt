@@ -36,3 +36,13 @@ func replicate<Ty t>(t x, Nat n) of Vect(t, n) {
         case (S(n)) {return Cons (x, replicate(x,n));}
     }
 }
+
+func testLoop (Nat n) of Nat {
+    let Nat x = 11;
+    x = 12; 
+    while (n < 10) {
+        n = n + 4;
+    }
+    n = n + 1;
+    return n + x;
+}
