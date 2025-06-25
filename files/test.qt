@@ -1,11 +1,12 @@
-func test2Loops (Nat n) of Nat {
-    let Nat x = 11; 
-    while (n < x) {
-        n = n + 1; 
+func isPrime (Nat n) of Bool {
+    let Nat i = 2;
+    while (i < n) {
+        if (n % i == 0 && !(n == i)) {
+            return False;
+        } else {
+            ()
+        }
+        i = i + 1; 
     }
-    let Nat y = 12;
-    while (n < 20) {
-        n = n + 1;
-    }
-    return n;
+    return True;
 }

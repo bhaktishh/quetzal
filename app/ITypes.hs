@@ -19,6 +19,9 @@ data ITm
   = ITmNat Nat
   | ITmPlus ITm ITm
   | ITmMinus ITm ITm
+  | ITmMult ITm ITm 
+  | ITmDiv ITm ITm 
+  | ITmMod ITm ITm
   | ITmBEq ITm ITm
   | ITmBLT ITm ITm
   | ITmBool Bool

@@ -258,6 +258,33 @@ pTmMinus = do
   y <- pSpaces pPTm
   pure $ PTmMinus x y
 
+pTmMult :: Parser PTm
+pTmMult = do
+  x <- pSpaces pPTm1
+  _ <- pSpaces $ char '*'
+  y <- pSpaces pPTm
+  pure $ PTmMult x y
+
+pTmDiv :: Parser PTm
+pTmDiv = do
+  x <- pSpaces pPTm1
+  _ <- pSpaces $ char '/'
+  y <- pSpaces pPTm
+  pure $ PTmDiv x y
+
+pTmMod :: Parser PTm
+pTmMod = do
+  x <- pSpaces pPTm1
+  _ <- pSpaces $ char '%'
+  y <- pSpaces pPTm
+  pure $ PTmMod x y
+
+pTmNot :: Parser PTm
+pTmNot = do
+  _ <- pSpaces $ char '!'
+  x <- pSpaces pPTm1
+  pure $ PTmNot x
+
 pTmBEq :: Parser PTm
 pTmBEq = do
   x <- pSpaces pPTm1
@@ -365,7 +392,7 @@ pPTyFunc = do
       }
 
 pTyHole :: Parser PTy
-pTyHole = pSpaces (char '?') >> pure PTyHole 
+pTyHole = pSpaces (char '?') >> pure PTyHole
 
 pPTy :: Parser PTy
 pPTy =
@@ -377,12 +404,16 @@ pPTy =
     <|> try pPTyCustom
     <|> try pPTyPTm
     <|> try pPTyList
-    <|> try pTyHole 
+    <|> try pTyHole
 
 pPTm0 :: Parser PTm
 pPTm0 =
   try pPlusPTm
     <|> try pTmMinus
+    <|> try pTmMult
+    <|> try pTmDiv
+    <|> try pTmMod
+    <|> try pTmNot
     <|> try pTmBEq
     <|> try pTmBLT
     <|> try pPTmReturn

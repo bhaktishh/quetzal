@@ -65,3 +65,16 @@ func test2Loops (Nat n) of Nat {
     }
     return n;
 }
+
+func testNestedLoops (Nat n) of Nat {
+    let Nat x = 11; 
+    while (n < x) {
+        n = n + 1; 
+        n = n + 3;
+        let Nat m = n;
+        while (m < x) {
+            m = m + 1;
+        }
+    }
+    return n;
+}

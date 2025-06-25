@@ -133,6 +133,24 @@ uTm (ITmMinus n1 n2) = do
   (ind, t) <- get
   put (ind, False)
   pure $ indent t ind ++ "(" ++ t1 ++ " - " ++ t2 ++ ")"
+uTm (ITmMod n1 n2) = do
+  t1 <- uTm n1
+  t2 <- uTm n2
+  (ind, t) <- get
+  put (ind, False)
+  pure $ indent t ind ++ "(" ++ t1 ++ " % " ++ t2 ++ ")"
+uTm (ITmMult n1 n2) = do
+  t1 <- uTm n1
+  t2 <- uTm n2
+  (ind, t) <- get
+  put (ind, False)
+  pure $ indent t ind ++ "(" ++ t1 ++ " * " ++ t2 ++ ")"
+uTm (ITmDiv n1 n2) = do
+  t1 <- uTm n1
+  t2 <- uTm n2
+  (ind, t) <- get
+  put (ind, False)
+  pure $ indent t ind ++ "(" ++ t1 ++ " / " ++ t2 ++ ")"
 uTm (ITmBEq n1 n2) = do
   t1 <- uTm n1
   t2 <- uTm n2
@@ -170,8 +188,8 @@ uTm (ITmIf cond thenCase elseCase) = do
   elseCase <- uTm elseCase
   put (ind, False)
   pure $ indent t ind ++ "if " ++ cond ++ " then \n" ++ thenCase ++ "\n" ++ indent t ind ++ "else \n" ++ elseCase
-uTm ITmUnit = do 
-  (ind, t) <- get 
+uTm ITmUnit = do
+  (ind, t) <- get
   pure $ indent t ind ++ "()"
 uTm (ITmTy t) = do
   (ind, _) <- get
@@ -191,7 +209,6 @@ uTm (ITmLet v Nothing val body) = do
   b <- uTm body
   put (ind, False)
   pure $ indent t ind ++ "let " ++ v ++ " = " ++ tm ++ " in\n" ++ b
-
 uTm (ITmLet v (Just ty) val body) = do
   (ind, t) <- get
   put (ind, False)
@@ -201,20 +218,31 @@ uTm (ITmLet v (Just ty) val body) = do
   b <- uTm body
   put (ind, False)
   pure $ indent t ind ++ "let " ++ v ++ " : " ++ ty ++ " = " ++ tm ++ " in\n" ++ b
-uTm (ITmMatch on cases) = do 
+uTm (ITmMatch on cases) = do
   (ind, t) <- get
   put (ind, False)
-  on <- mapM uTm on 
+  on <- mapM uTm on
   put (ind + 1, True)
-  cases <- mapM (\(xs, v) -> do 
-    (ind, t) <- get 
-    put (ind, False)
-    xs <- mapM uTm xs
-    v <- uTm v
-    pure (xs, v)) cases 
+  cases <-
+    mapM
+      ( \(xs, v) -> do
+          (ind, t) <- get
+          put (ind, False)
+          xs <- mapM uTm xs
+          v <- uTm v
+          pure (xs, v)
+      )
+      cases
   put (ind, False)
-  pure $ indent t ind ++ "case " ++ "(" ++ intercalate "," on ++ ")" ++ " of\n" 
-    ++ indent t (ind + 1) ++ intercalate ("\n" ++ indent t (ind + 1)) (map (\(xs, tm) -> "(" ++ intercalate "," xs ++ ")" ++ " => " ++ tm) cases)
+  pure $
+    indent t ind
+      ++ "case "
+      ++ "("
+      ++ intercalate "," on
+      ++ ")"
+      ++ " of\n"
+      ++ indent t (ind + 1)
+      ++ intercalate ("\n" ++ indent t (ind + 1)) (map (\(xs, tm) -> "(" ++ intercalate "," xs ++ ")" ++ " => " ++ tm) cases)
 
 uFuncs :: IFunc -> Indent String
 uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
@@ -225,10 +253,14 @@ uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
   put (ind + 1, True)
   body <- uTm iFuncBody
   put (ind, False)
-  deps <- mapM (\i -> do 
-    (ind, t) <- get 
-    put (ind + 1, True)
-    uTm i) iWhere
+  deps <-
+    mapM
+      ( \i -> do
+          (ind, t) <- get
+          put (ind + 1, True)
+          uTm i
+      )
+      iWhere
   put (ind, False)
   pure $
     indent t ind

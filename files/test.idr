@@ -6,17 +6,18 @@ where
 	test2Loops_rec0 : (n : Nat) -> (x : Nat) -> Nat
 	test2Loops_rec0 n x = 
 		if not (n < x) then 
-			let y : Nat = 12 in
-				(test2Loops_rec0_rec0 n x y)
+			n
 		else 
 			let n = (n + 1) in
-				(test2Loops_rec0 n x)
+				let n = (n + 3) in
+					let m : Nat = n in
+						(test2Loops_rec0_rec0 m n x)
  where 
-		test2Loops_rec0_rec0 : (n : Nat) -> (x : Nat) -> (y : Nat) -> Nat
-		test2Loops_rec0_rec0 n x y = 
-			if not (n < 20) then 
-				n
+		test2Loops_rec0_rec0 : (m : Nat) -> (n : ?) -> (x : Nat) -> Nat
+		test2Loops_rec0_rec0 m n x = 
+			if not (m < x) then 
+				(test2Loops_rec0 n x)
 			else 
-				let n = (n + 1) in
-					(test2Loops_rec0_rec0 n x y)
+				let m = (m + 1) in
+					(test2Loops_rec0_rec0 m n x)
 
