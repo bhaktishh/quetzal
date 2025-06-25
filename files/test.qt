@@ -1,12 +1,18 @@
 func isPrime (Nat n) of Bool {
     let Nat i = 2;
     while (i < n) {
-        if (n % i == 0 && !(n == i)) {
-            return False;
-        } else {
-            ()
-        }
+        if (n) {
+i = i + 1;         } else {
+i = i + 2;         }
         i = i + 1; 
+    }
+    switch (n) {
+        case (0) {
+            i = i + 6; 
+        }
+        case (2) {
+            i = i + 6; 
+        }
     }
     return True;
 }

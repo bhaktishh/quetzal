@@ -37,6 +37,7 @@ data PTm
   | PTmBEq PTm PTm
   | PTmBLT PTm PTm
   | PTmBool Bool
+  | PTmList PTy (List PTm)
   | PTmUnit
   | PTmNot PTm
   | PTmPTy PTy
@@ -44,10 +45,7 @@ data PTm
   | PTmCon String (List PTm)
   | PTmFunc Func
   | PTmFuncCall PTm (List PTm)
-  | PTmBlock (List Stmt) PTm
   | PTmIf PTm PTm PTm
-  | PTmReturn PTm
-  | PTmSwitch Switch
   deriving (Show, Eq)
 
 data Switch = Switch
@@ -58,24 +56,28 @@ data Switch = Switch
 
 data Case = Case
   { caseOn :: List PTm,
-    caseBody :: PTm
+    caseBody :: Stmt
   }
   deriving (Show, Eq)
 
 data Stmt
-  = DeclAssign (Maybe PTy) String PTm
-  | Assign String PTm
-  | While
+  = StDeclAssign (Maybe PTy) String PTm
+  | StAssign String PTm
+  | StWhile
       { condition :: PTm,
-        body :: List Stmt
+        body :: Stmt
       }
+  | StReturn PTm 
+  | StIf PTm Stmt Stmt 
+  | StBlock (List Stmt) 
+  | StSwitch Switch 
   deriving (Show, Eq)
 
 data Func = Func
   { funcName :: String,
     funcRetTy :: PTy,
     funcArgs :: List AnnParam,
-    funcBody :: PTm
+    funcBody :: Stmt
   }
   deriving (Show, Eq)
 

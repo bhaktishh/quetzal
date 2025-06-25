@@ -3,7 +3,7 @@
 module Unparse where
 
 import Control.Monad.State.Lazy
-import Data.List (intercalate, intersperse)
+import Data.List (intercalate)
 import ITypes
 
 type Indent a = State (Int, Bool) a

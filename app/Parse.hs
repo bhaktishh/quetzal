@@ -83,7 +83,7 @@ pFunc = do
   let funcArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   _ <- pSpaces $ string "of"
   funcRetTy <- pSpaces pPTy
-  funcBody <- pSpaces $ pCurlies (try pPTm <|> pure PTmUnit)
+  funcBody <- pSpaces $ pCurlies (try pStmt <|> pure (StBlock []))
   pure $
     Func
       { funcName,
@@ -214,7 +214,7 @@ pAssign = do
   _ <- pSpaces $ char '='
   rhs <- pSpaces pPTm
   _ <- pSpaces $ char ';'
-  pure $ Assign var rhs
+  pure $ StAssign var rhs
 
 pDeclAssign :: Parser Stmt
 pDeclAssign = do
@@ -223,26 +223,39 @@ pDeclAssign = do
   _ <- pSpaces $ char '='
   rhs <- pSpaces pPTm0
   _ <- pSpaces $ char ';'
-  pure $ DeclAssign ty var rhs
+  pure $ StDeclAssign ty var rhs
 
 pWhile :: Parser Stmt
 pWhile = do
   _ <- pSpaces $ string "while"
   condition <- pSpaces $ pParens pPTm
-  body <- pSpaces $ pCurlies $ many pStmt
+  body <- pSpaces $ pCurlies pStmt
   pure $
-    While
+    StWhile
       { condition,
         body
       }
 
+pStIf :: Parser Stmt
+pStIf = do
+  _ <- pSpaces $ string "if"
+  cond <- pSpaces $ pParens pPTm
+  t <- pSpaces $ pCurlies pStmt
+  _ <- pSpaces $ string "else"
+  e <- pSpaces $ pCurlies pStmt
+  pure $ StIf cond t e
+
 pStmt :: Parser Stmt
-pStmt =
+pStmt = StBlock <$> many pStmt0
+
+pStmt0 :: Parser Stmt
+pStmt0 =
   try pDeclAssign
     <|> try pAssign
     <|> try pWhile
-
--- <|> try pWhile
+    <|> try pStReturn
+    <|> try pStIf
+    <|> try pStSwitch
 
 pPlusPTm :: Parser PTm
 pPlusPTm = do
@@ -305,18 +318,12 @@ pPTmCon = do
   args <- pSpaces $ try (pParens $ pPTm `sepBy` char ',') <|> pure []
   pure $ PTmCon name args
 
-pPTmBlock :: Parser PTm
-pPTmBlock = do
-  stmts <- pSpaces $ many pStmt
-  tm <- pSpaces pPTm0
-  pure $ PTmBlock stmts tm
-
-pPTmReturn :: Parser PTm
-pPTmReturn = do
+pStReturn :: Parser Stmt
+pStReturn = do
   _ <- pSpaces $ string "return"
   tm <- pSpaces pPTm
   _ <- pSpaces $ char ';'
-  pure $ PTmReturn tm
+  pure $ StReturn tm
 
 pPTmVar :: Parser PTm
 pPTmVar = PTmVar <$> pVar
@@ -336,13 +343,13 @@ pIf = do
   e <- pSpaces $ pCurlies pPTm
   pure $ PTmIf cond t e
 
-pPTmSwitch :: Parser PTm
-pPTmSwitch = do
+pStSwitch :: Parser Stmt
+pStSwitch = do
   _ <- pSpaces $ string "switch"
   switchOn <- pSpaces $ pParens $ pPTm `sepBy` char ','
   cases <- pSpaces $ pCurlies $ many pCase
   pure $
-    PTmSwitch $
+    StSwitch $
       Switch
         { switchOn,
           cases
@@ -352,7 +359,7 @@ pCase :: Parser Case
 pCase = do
   _ <- pSpaces $ string "case"
   caseOn <- pSpaces $ pParens $ pPTm `sepBy` char ','
-  caseBody <- pSpaces $ pCurlies pPTm
+  caseBody <- pSpaces $ pCurlies pStmt
   pure $
     Case
       { caseOn,
@@ -416,10 +423,8 @@ pPTm0 =
     <|> try pTmNot
     <|> try pTmBEq
     <|> try pTmBLT
-    <|> try pPTmReturn
     <|> try pFuncCall
     <|> try pPTmCon
-    <|> try pPTmSwitch
     <|> try pIf
     <|> try pPTm1
 
@@ -432,4 +437,4 @@ pPTm1 =
     <|> pTmUnit
 
 pPTm :: Parser PTm
-pPTm = try pPTmBlock <|> try pPTm0
+pPTm = try pPTm0

@@ -12,21 +12,22 @@ data ITy
   | ITyCustom String (List ITm)
   | ITyList ITy
   | ITyTm ITm
-  | ITyHole 
+  | ITyHole
   deriving (Show, Eq)
 
 data ITm
   = ITmNat Nat
   | ITmPlus ITm ITm
   | ITmMinus ITm ITm
-  | ITmMult ITm ITm 
-  | ITmDiv ITm ITm 
+  | ITmMult ITm ITm
+  | ITmDiv ITm ITm
   | ITmMod ITm ITm
   | ITmBEq ITm ITm
   | ITmBLT ITm ITm
   | ITmBool Bool
   | ITmUnit
   | ITmNot ITm
+  | ITmList ITy (List ITm)
   | ITmTy ITy
   | ITmVar String
   | ITmCon String (List ITm)

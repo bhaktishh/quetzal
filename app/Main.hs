@@ -33,7 +33,7 @@ processFile file = do
     Right tm -> writeIdris (map doFuncs tm) "files/test.idr"
 
 doFuncs :: ProgEl -> IProgEl
-doFuncs (PFunc f) = IIFunc $ (unLoopFunc . doShadowing) f
+doFuncs (PFunc f) = IIFunc $ trFunc f
 doFuncs (PDecl x) = IIDecl $ trDecl x
 
 writeIdris :: IProg -> String -> IO ()
