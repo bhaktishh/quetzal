@@ -30,6 +30,18 @@ func append<Nat n, Nat m, Ty t> (Vect(t, n) v1, Vect(t, m) v2) of Vect(t, n+m) {
     }
 }
 
+func append<Nat n, Nat m, Ty t> (Vect(t, n) v1, Vect(t, m) v2) of Vect(t, n+m) {
+    switch (v1, v2) {
+        case (Nil(), v2) {
+            return v2;
+        }
+        case (Cons(x, xs), v2) {
+            let v3 = append(xs, v2);
+            return Cons(x, v3);
+        }   
+    }
+}
+
 func replicate<Ty t>(t x, Nat n) of Vect(t, n) {
     switch(n) {
         case (0) {return Nil;}
@@ -77,4 +89,49 @@ func testNestedLoops (Nat n) of Nat {
         }
     }
     return n;
+}
+
+ func isPrime (Nat n) of Bool {
+    let Nat i = 2;
+    while (i < n) {
+        if (0 < n) {
+i = i + 1;         } else {
+i = i + 2;         }
+        i = i + 1; 
+    }
+    switch (n) {
+        case (0) {
+            i = i + 3; 
+        }
+        case (n) {
+            i = i + 6; 
+        }
+    }
+    return True;
+}
+
+type Vect(Ty t, Nat n) {
+    constructor Nil() of Vect(t, 0);
+    constructor Cons(t head, Vect(t, n) tail) of Vect(t, 1+n);
+}
+
+func binSearch (Nat key, Vect(Nat, n) v) of Nat {
+    let Nat low = 0;
+    let Nat high = n - 1; 
+    let Nat mid = 0;
+    let Nat x = 0; 
+    while (low < (high + 1)) {
+        mid = (low + high) / 2;
+        x = index(v, mid); 
+        if (key == x) {
+            return mid;
+        } else {
+            if (key < x) {
+                high = mid - 1;
+            } else {
+                low = mid + 1; 
+            }
+        }
+    }
+    return 0; 
 }

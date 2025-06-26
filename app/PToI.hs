@@ -26,7 +26,7 @@ trTm (PTmMod t1 t2) = ITmMod (trTm t1) (trTm t2)
 trTm (PTmBEq t1 t2) = ITmBEq (trTm t1) (trTm t2)
 trTm (PTmBLT t1 t2) = ITmBLT (trTm t1) (trTm t2)
 trTm (PTmList t1 xs) = ITmList (trTy t1) (map trTm xs)
-trTm (PTmFunc f) = undefined
+trTm (PTmFunc f) = ITmFunc (trFunc f)
 
 trBody :: Stmt -> Func -> (ITm, List ITm)
 trBody x f = case x of

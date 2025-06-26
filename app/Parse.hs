@@ -221,7 +221,7 @@ pDeclAssign = do
   _ <- pSpaces $ string "let"
   (ty, var) <- try ((,) <$> optional (pSpaces pPTy) <*> pSpaces pLowerStr) <|> (,) Nothing <$> pSpaces pLowerStr
   _ <- pSpaces $ char '='
-  rhs <- pSpaces pPTm0
+  rhs <- pSpaces pPTm
   _ <- pSpaces $ char ';'
   pure $ StDeclAssign ty var rhs
 
@@ -246,7 +246,7 @@ pStIf = do
   pure $ StIf cond t e
 
 pStmt :: Parser Stmt
-pStmt = StBlock <$> many pStmt0
+pStmt = StBlock <$> some pStmt0
 
 pStmt0 :: Parser Stmt
 pStmt0 =
@@ -259,57 +259,57 @@ pStmt0 =
 
 pPlusPTm :: Parser PTm
 pPlusPTm = do
-  x <- pSpaces pPTm1
+  x <- pSpaces pPTm0
   _ <- pSpaces $ char '+'
-  y <- pSpaces pPTm
+  y <- pSpaces pPTm0
   pure $ PTmPlus x y
 
 pTmMinus :: Parser PTm
 pTmMinus = do
-  x <- pSpaces pPTm1
+  x <- pSpaces pPTm0
   _ <- pSpaces $ char '-'
-  y <- pSpaces pPTm
+  y <- pSpaces pPTm0
   pure $ PTmMinus x y
 
 pTmMult :: Parser PTm
 pTmMult = do
-  x <- pSpaces pPTm1
+  x <- pSpaces pPTm0
   _ <- pSpaces $ char '*'
-  y <- pSpaces pPTm
+  y <- pSpaces pPTm0
   pure $ PTmMult x y
 
 pTmDiv :: Parser PTm
 pTmDiv = do
-  x <- pSpaces pPTm1
+  x <- pSpaces pPTm0
   _ <- pSpaces $ char '/'
-  y <- pSpaces pPTm
+  y <- pSpaces pPTm0
   pure $ PTmDiv x y
 
 pTmMod :: Parser PTm
 pTmMod = do
-  x <- pSpaces pPTm1
+  x <- pSpaces pPTm0
   _ <- pSpaces $ char '%'
-  y <- pSpaces pPTm
+  y <- pSpaces pPTm0
   pure $ PTmMod x y
 
 pTmNot :: Parser PTm
 pTmNot = do
   _ <- pSpaces $ char '!'
-  x <- pSpaces pPTm1
+  x <- pSpaces pPTm
   pure $ PTmNot x
 
 pTmBEq :: Parser PTm
 pTmBEq = do
-  x <- pSpaces pPTm1
+  x <- pSpaces pPTm0
   _ <- pSpaces $ string "=="
-  y <- pSpaces pPTm
+  y <- pSpaces pPTm0
   pure $ PTmBEq x y
 
 pTmBLT :: Parser PTm
 pTmBLT = do
-  x <- pSpaces pPTm1
+  x <- pSpaces pPTm0
   _ <- pSpaces $ char '<'
-  y <- pSpaces pPTm
+  y <- pSpaces pPTm0
   pure $ PTmBLT x y
 
 pPTmCon :: Parser PTm
@@ -330,8 +330,8 @@ pPTmVar = PTmVar <$> pVar
 
 pFuncCall :: Parser PTm
 pFuncCall = do
-  name <- pSpaces pPTm1
-  args <- pSpaces $ pParens $ (pSpaces pPTm1 `sepBy` char ',') <|> pure []
+  name <- pSpaces pPTm0
+  args <- pSpaces $ pParens $ (pSpaces pPTm `sepBy` char ',') <|> pure []
   pure $ PTmFuncCall name args
 
 pIf :: Parser PTm
@@ -367,7 +367,7 @@ pCase = do
       }
 
 pPTyPTm :: Parser PTy
-pPTyPTm = PTyPTm <$> pPTm0
+pPTyPTm = PTyPTm <$> pPTm
 
 pPTmPTy :: Parser PTm
 pPTmPTy = PTmPTy <$> pPTy
@@ -413,28 +413,26 @@ pPTy =
     <|> try pPTyList
     <|> try pTyHole
 
-pPTm0 :: Parser PTm
-pPTm0 =
-  try pPlusPTm
+pPTm1 :: Parser PTm
+pPTm1 = try pPlusPTm
     <|> try pTmMinus
     <|> try pTmMult
     <|> try pTmDiv
     <|> try pTmMod
-    <|> try pTmNot
     <|> try pTmBEq
     <|> try pTmBLT
     <|> try pFuncCall
     <|> try pPTmCon
     <|> try pIf
-    <|> try pPTm1
+    <|> try pPTm0
 
-pPTm1 :: Parser PTm
-pPTm1 =
-  try (pParens pPTm)
+pPTm0 :: Parser PTm
+pPTm0 = try (pParens pPTm1)
     <|> try pPTmVar
-    <|> pNat
-    <|> pBool
-    <|> pTmUnit
+    <|> try pNat
+    <|> try pBool
+    <|> try pTmUnit
+    <|> try pTmNot
 
 pPTm :: Parser PTm
-pPTm = try pPTm0
+pPTm = pSpaces pPTm1

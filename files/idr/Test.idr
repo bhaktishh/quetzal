@@ -1,29 +1,28 @@
-module Test
+import Data.Vect 
 
--- func isPrime (Nat n) of Bool {
---     Nat i = 2;
---     while (i < n) {
---         if (n % i == 0) {
---             if (!(n == i)) {
---                 return False;
---             } else {
---                 ()
---             }
---         } else {
---             ()
---         }
---     }
---     return True;
--- }
-
-isPrime : Nat -> Bool 
-isPrime n = let i : Nat = 2 in isPrimeRec n i 
-	where
-		isPrimeRec : Nat -> Nat -> Bool
-		isPrimeRec n i = 
-			if (not (i < n)) then 
-				True else (if (remainder n i == 0) then True else False)
-				-- (if (n % i == 0 && n != i) then 
-				-- False else True)
-						-- (let i = i + 1 in 
-						-- 	isPrimeRec n (i + 1)))
+binSearch : (key : Nat) -> (v : Vect n Nat) -> Fin n
+binSearch key v = 
+	let low : Fin n = 0 in
+		let high : Fin n = (n - 1) in
+			let mid : Fin n = 0 in
+				let x : Nat = 0 in
+					let ret : Fin n = 0 in
+						(binSearch_rec0 high key low mid ret v x)
+where 
+	binSearch_rec0 : (high : Fin n) -> (key : Nat) -> (low : Fin n) -> (mid : Fin n) -> (ret : Fin n) -> (v : Vect n Nat) -> (x : Nat) -> Fin n
+	binSearch_rec0 high key low mid ret v x = 
+		if not (low < high) then 
+			ret
+		else
+			let mid : Fin n = ?nooo in
+				let x : Nat = (index mid v) in
+					if (key == x) then 
+						let ret : Fin n = mid in
+							(binSearch_rec0 high key low mid ret v x)
+					else 
+						if (key < x) then 
+							let high : Fin n = (mid - 1) in
+								(binSearch_rec0 high key low mid ret v x)
+						else 
+							let low : Fin n = (mid + 1) in
+								(binSearch_rec0 high key low mid ret v x)

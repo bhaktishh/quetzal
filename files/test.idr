@@ -1,23 +1,27 @@
-isPrime : (n : Nat) -> Bool
-isPrime n = 
-	let i : Nat = 2 in
-		(isPrime_rec0 i n)
+binSearch : (key : Nat) -> (v : Vect n Nat) -> Fin n
+binSearch key v = 
+	let low : Fin n = 0 in
+		let high : Fin n = (n - 1) in
+			let mid : Fin n = 0 in
+				let x : Nat = 0 in
+					let ret : Fin n = 0 in
+						(binSearch_rec0 high key low mid ret v x)
 where 
-	isPrime_rec0 : (i : Nat) -> (n : Nat) -> Bool
-	isPrime_rec0 i n = 
-		if not (i < n) then 
-			case (n) of
-				(0) => let i : Nat = (i + 6) in
-					True
-				(2) => let i : Nat = (i + 6) in
-					True
+	binSearch_rec0 : (high : Fin n) -> (key : Nat) -> (low : Fin n) -> (mid : Fin n) -> (ret : Fin n) -> (v : Vect n Nat) -> (x : Nat) -> Fin n
+	binSearch_rec0 high key low mid ret v x = 
+		if not (low < (high + 1)) then 
+			ret
 		else 
-			if n then 
-				let i : Nat = (i + 1) in
-					let i : Nat = (i + 1) in
-						(isPrime_rec0 i n)
-			else 
-				let i : Nat = (i + 2) in
-					let i : Nat = (i + 1) in
-						(isPrime_rec0 i n)
+			let mid : Fin n = ((low + high) / 2) in
+				let x : Nat = (index mid v) in
+					if (key == x) then 
+						let ret : Fin n = mid in
+							(binSearch_rec0 high key low mid ret v x)
+					else 
+						if (key < x) then 
+							let high : Fin n = (mid - 1) in
+								(binSearch_rec0 high key low mid ret v x)
+						else 
+							let low : Fin n = (mid + 1) in
+								(binSearch_rec0 high key low mid ret v x)
 
