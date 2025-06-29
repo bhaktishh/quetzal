@@ -1,12 +1,10 @@
 func search (Nat n, Vect(n, Nat) v, Nat x) of Fin(n) {
     let Fin(n) i = 0; 
-    let Nat ret = n; 
-    while (i < n) {
-        if ((index(i, ls)) == x) {
+    let Fin(n) ret = n; 
+    while ((finToNat(i)) < n) {
+        if ((index(i, v)) == x) {
             ret = i;
-        } else {
-            ;;
-        }
+        } else {;;}
         i = i + 1; 
     }
     return ret; 

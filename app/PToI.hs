@@ -86,7 +86,7 @@ getHVars (x : xs) m = case x of
 defOuter :: String -> List AnnParam -> Int -> (Stmt, String, List AnnParam)
 defOuter funcName funcArgs i =
   let funcInner = funcName ++ "_rec" ++ show i
-      ps = nubAnnParam M.empty funcArgs
+      ps = nubAnnParam M.empty funcArgs []
    in ( StBlock [StReturn (PTmFuncCall (PTmVar funcInner) (nub $ map (PTmVar . getAnnParamVar) ps))],
         funcInner,
         ps
@@ -196,6 +196,8 @@ getAnnParamVar (AnnParam (_, str) _) = str
 getAnnParamPTy :: AnnParam -> PTy
 getAnnParamPTy (AnnParam (ty, _) _) = ty
 
-nubAnnParam :: M.Map String (PTy, Bool) -> List AnnParam -> List AnnParam
-nubAnnParam m [] = map (\(v, (ty, vis)) -> AnnParam (ty, v) vis) (M.toList m)
-nubAnnParam m ((AnnParam (ty, v) vis) : xs) = nubAnnParam (M.insert v (ty, vis) m) xs
+nubAnnParam :: M.Map String (PTy, Bool) -> List AnnParam -> List AnnParam -> List AnnParam
+nubAnnParam m [] lnew = lnew
+nubAnnParam m (x@(AnnParam (ty, v) vis) : xs) lnew = case M.lookup v m of
+  Nothing -> nubAnnParam (M.insert v (ty, vis) m) xs (lnew ++ [x])
+  Just _ -> nubAnnParam m xs lnew

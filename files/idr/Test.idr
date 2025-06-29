@@ -1,22 +1,21 @@
-import Data.List
+import Data.Vect
 
-search : (ls : List Nat) -> (n : Nat) -> (x : Nat) -> Nat
-search ls n x = 
-	let i : Nat = 0 in
-		let ret : Nat = n in
-			(search_rec0 i ls n ret x)
+search : (n : Nat) -> (v : Vect n Nat) -> (x : Nat) -> Fin n
+search n v x = 
+	let i : Fin n = 0 in
+		let ret : Fin n = n in
+			(search_rec0 n v x i ret)
 where 
-	search_rec0 : (i : Nat) -> (ls : List Nat) -> (n : Nat) -> (ret : Nat) -> (x : Nat) -> Nat
-	search_rec0 i ls n ret x = 
-		if not (i < n) then 
+	search_rec0 : (n : Nat) -> (v : Vect n Nat) -> (x : Nat) -> (i : Fin n) -> (ret : Fin n) -> Fin n
+	search_rec0 n v x i ret = 
+		if not ((finToNat i) < n) then 
 			ret
 		else 
-			if ((index i ls) == x) then 
-				let ret : Nat = i in
-					let i : Nat = (i + 1) in
-						(search_rec0 i ls n ret x)
+			if ((index i v) == x) then 
+				let ret : Fin n = i in
+					let i : Fin n = (i + 1) in
+						(search_rec0 n v x i ret)
 			else 
-				let ret : Nat = ret in
-					let i : Nat = (i + 1) in
-						(search_rec0 i ls n ret x)
+				let i : Fin n = (i + 1) in
+					(search_rec0 n v x i ret)
 
