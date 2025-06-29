@@ -101,19 +101,21 @@ defInner condition body fname retty tl ps =
     { funcName = fname,
       funcArgs = ps,
       funcRetTy = retty,
-      funcBody = StSwitch Switch {
-        switchOn = [condition], 
-        cases = [
-          Case {
-            caseOn = [PTmCon "No" [PTmVar "noprf"]], 
-            caseBody = StBlock tl
-          },
-          Case {
-            caseOn = [PTmCon "Yes" [PTmVar "yesprf"]],
-            caseBody = StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))]
-          }
-        ]
-      }
+      funcBody =
+        StSwitch
+          Switch
+            { switchOn = [condition],
+              cases =
+                [ Case
+                    { caseOn = [PTmCon "No" [PTmVar "noprf"]],
+                      caseBody = StBlock tl
+                    },
+                  Case
+                    { caseOn = [PTmCon "Yes" [PTmVar "yesprf"]],
+                      caseBody = StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))]
+                    }
+                ]
+            }
     }
 
 trTy :: PTy -> ITy
