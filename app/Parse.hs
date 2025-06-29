@@ -225,6 +225,11 @@ pDeclAssign = do
   _ <- pSpaces $ char ';'
   pure $ StDeclAssign ty var rhs
 
+pSkip :: Parser Stmt
+pSkip = do
+  _ <- pSpaces $ string ";;"
+  pure $ StSkip
+
 pWhile :: Parser Stmt
 pWhile = do
   _ <- pSpaces $ string "while"
@@ -250,7 +255,8 @@ pStmt = StBlock <$> some pStmt0
 
 pStmt0 :: Parser Stmt
 pStmt0 =
-  try pDeclAssign
+  try pSkip
+    <|> try pDeclAssign
     <|> try pAssign
     <|> try pWhile
     <|> try pStReturn
@@ -414,7 +420,8 @@ pPTy =
     <|> try pTyHole
 
 pPTm1 :: Parser PTm
-pPTm1 = try pPlusPTm
+pPTm1 =
+  try pPlusPTm
     <|> try pTmMinus
     <|> try pTmMult
     <|> try pTmDiv
@@ -427,7 +434,8 @@ pPTm1 = try pPlusPTm
     <|> try pPTm0
 
 pPTm0 :: Parser PTm
-pPTm0 = try (pParens pPTm1)
+pPTm0 =
+  try (pParens pPTm1)
     <|> try pPTmVar
     <|> try pNat
     <|> try pBool

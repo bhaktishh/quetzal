@@ -1,28 +1,22 @@
-import Data.Vect 
+import Data.List
 
-binSearch : (key : Nat) -> (v : Vect n Nat) -> Fin n
-binSearch key v = 
-	let low : Fin n = 0 in
-		let high : Fin n = (n - 1) in
-			let mid : Fin n = 0 in
-				let x : Nat = 0 in
-					let ret : Fin n = 0 in
-						(binSearch_rec0 high key low mid ret v x)
+search : (ls : List Nat) -> (n : Nat) -> (x : Nat) -> Nat
+search ls n x = 
+	let i : Nat = 0 in
+		let ret : Nat = n in
+			(search_rec0 i ls n ret x)
 where 
-	binSearch_rec0 : (high : Fin n) -> (key : Nat) -> (low : Fin n) -> (mid : Fin n) -> (ret : Fin n) -> (v : Vect n Nat) -> (x : Nat) -> Fin n
-	binSearch_rec0 high key low mid ret v x = 
-		if not (low < high) then 
+	search_rec0 : (i : Nat) -> (ls : List Nat) -> (n : Nat) -> (ret : Nat) -> (x : Nat) -> Nat
+	search_rec0 i ls n ret x = 
+		if not (i < n) then 
 			ret
-		else
-			let mid : Fin n = ?nooo in
-				let x : Nat = (index mid v) in
-					if (key == x) then 
-						let ret : Fin n = mid in
-							(binSearch_rec0 high key low mid ret v x)
-					else 
-						if (key < x) then 
-							let high : Fin n = (mid - 1) in
-								(binSearch_rec0 high key low mid ret v x)
-						else 
-							let low : Fin n = (mid + 1) in
-								(binSearch_rec0 high key low mid ret v x)
+		else 
+			if ((index i ls) == x) then 
+				let ret : Nat = i in
+					let i : Nat = (i + 1) in
+						(search_rec0 i ls n ret x)
+			else 
+				let ret : Nat = ret in
+					let i : Nat = (i + 1) in
+						(search_rec0 i ls n ret x)
+

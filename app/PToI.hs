@@ -41,6 +41,8 @@ mapToAnnParam :: M.Map String PTy -> List AnnParam
 mapToAnnParam m = map (\(v, ty) -> AnnParam (ty, v) True) (M.toList m)
 
 trListStmt :: List Stmt -> M.Map String PTy -> Func -> List ITm -> (ITm, List ITm)
+trListStmt [StSkip] _ _ _ = error "cannot end with skip i think"
+trListStmt (StSkip : xs) m f i = trListStmt xs m f i
 trListStmt [] _ _ i = (ITmUnit, i)
 trListStmt [StBlock s] m f i = trListStmt s m f i
 trListStmt (StBlock s : xs) m f i = trListStmt (s ++ xs) m f i

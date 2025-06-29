@@ -71,6 +71,7 @@ data Stmt
   | StIf PTm Stmt Stmt 
   | StBlock (List Stmt) 
   | StSwitch Switch 
+  | StSkip
   deriving (Show, Eq)
 
 data Func = Func

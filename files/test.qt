@@ -1,21 +1,13 @@
-func binSearch (Nat key, Vect(n, Nat) v) of Fin(n) {
-    let Fin(n) low = 0;
-    let Fin(n) high = n - 1; 
-    let Fin(n) mid = 0;
-    let Nat x = 0;
-    let Fin(n) ret = 0;
-    while (low < (high + 1)) {
-        mid = (low + high) / 2;
-        x = index(mid, v); 
-        if (key == x) {
-            ret = mid;
+func search (Nat n, Vect(n, Nat) v, Nat x) of Fin(n) {
+    let Fin(n) i = 0; 
+    let Nat ret = n; 
+    while (i < n) {
+        if ((index(i, ls)) == x) {
+            ret = i;
         } else {
-            if (key < x) {
-                high = mid - 1;
-            } else {
-                low = mid + 1; 
-            }
+            ;;
         }
+        i = i + 1; 
     }
     return ret; 
 }

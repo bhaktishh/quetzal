@@ -135,3 +135,31 @@ func binSearch (Nat key, Vect(Nat, n) v) of Nat {
     }
     return 0; 
 }
+
+func search(Vect(n, Nat) v, Fin(n) n, Nat x) of Maybe(Fin(n)) {
+    let Fin(n) i = 0; 
+    let Maybe(Fin(n)) ret = Nothing;
+    while (i < n) {
+        if ((index(i,v)) == x) {
+            ret = Just(i);
+        } else {
+            ret = ret;
+        }
+        i = i + 1; 
+    }
+    return ret;
+}
+
+func search (List(Nat) ls, Nat n, Nat x) of Nat {
+    let Nat i = 0; 
+    let Nat ret = n; 
+    while (i < n) {
+        if (index(i, ls) == x) {
+            ret = i;
+        } else {
+            ret = ret; 
+        }
+        i = i + 1; 
+    }
+    return ret; 
+}
