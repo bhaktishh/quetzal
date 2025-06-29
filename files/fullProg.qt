@@ -1,6 +1,6 @@
-type Vect(Ty t, Nat n) {
-    constructor Nil() of Vect(t, 0);
-    constructor Cons(t head, Vect(t, n) tail) of Vect(t, 1+n);
+type Vect(Nat n, Ty t) {
+    constructor Nil() of Vect(0, t);
+    constructor Cons(t head, Vect(n, t) tail) of Vect(1+n, t);
 }
 type Pair(Ty a, Func(a x => Ty) p) {
     constructor MkPair (a x, p(t) y) of Pair(a, p);
@@ -17,18 +17,6 @@ func add5(Nat x) of Nat {
 }
 
 func test<>() of Void {}
-
-func append<Nat n, Nat m, Ty t> (Vect(t, n) v1, Vect(t, m) v2) of Vect(t, n+m) {
-    switch (v1, v2) {
-        case (Nil(), v2) {
-            return v2;
-        }
-        case (Cons(x, xs), v2) {
-            let v3 = append(xs, v2);
-            return Cons(x, v3);
-        }   
-    }
-}
 
 func append<Nat n, Nat m, Ty t> (Vect(t, n) v1, Vect(t, m) v2) of Vect(t, n+m) {
     switch (v1, v2) {
@@ -110,11 +98,6 @@ i = i + 2;         }
     return True;
 }
 
-type Vect(Ty t, Nat n) {
-    constructor Nil() of Vect(t, 0);
-    constructor Cons(t head, Vect(t, n) tail) of Vect(t, 1+n);
-}
-
 func binSearch (Nat key, Vect(Nat, n) v) of Nat {
     let Nat low = 0;
     let Nat high = n - 1; 
@@ -124,42 +107,32 @@ func binSearch (Nat key, Vect(Nat, n) v) of Nat {
         mid = (low + high) / 2;
         x = index(v, mid); 
         if (key == x) {
-            return mid;
+            ;;
         } else {
             if (key < x) {
                 high = mid - 1;
             } else {
                 low = mid + 1; 
             }
+            mid = 0;
         }
     }
-    return 0; 
+    return mid; 
 }
 
-func search(Vect(n, Nat) v, Fin(n) n, Nat x) of Maybe(Fin(n)) {
-    let Fin(n) i = 0; 
-    let Maybe(Fin(n)) ret = Nothing;
-    while (i < n) {
-        if ((index(i,v)) == x) {
-            ret = Just(i);
-        } else {
-            ret = ret;
-        }
-        i = i + 1; 
-    }
-    return ret;
-}
+import Data.Vect
+import Data.Nat
+import Decidable.Equality
 
-func search (List(Nat) ls, Nat n, Nat x) of Nat {
-    let Nat i = 0; 
-    let Nat ret = n; 
-    while (i < n) {
-        if (index(i, ls) == x) {
-            ret = i;
-        } else {
-            ret = ret; 
+func search (Nat n, Vect(n, Nat) ls, Nat x) of Maybe(Fin(n)) {
+    let Nat i = 0;
+    let Maybe(Fin(n)) ret = Nothing; 
+    while(i < n) {
+        if ((index(natToFinLT(i), ls)) == x) {
+            ret = Just((natToFinLT(i))); 
         }
-        i = i + 1; 
+        else {;;}
+        i = 1 + i; 
     }
     return ret; 
 }

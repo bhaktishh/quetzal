@@ -28,6 +28,9 @@ trTm (PTmBLT t1 t2) = ITmBLT (trTm t1) (trTm t2)
 trTm (PTmList t1 xs) = ITmList (trTy t1) (map trTm xs)
 trTm (PTmFunc f) = ITmFunc (trFunc f)
 
+convIf :: ITm -> ITm -> ITm -> ITm
+convIf c t e = ITmMatch [c] [([ITmCon "No" [ITmVar "noprf"]], e), ([ITmCon "Yes" [ITmVar "yesprf"]], t)]
+
 trBody :: Stmt -> Func -> (ITm, List ITm)
 trBody x f = case x of
   StBlock ls -> trListStmt ls (mapFromFuncArgs (funcArgs f) M.empty) f []
@@ -51,7 +54,7 @@ trListStmt (StReturn t : _ : _) _ _ _ = error "return should be the last stateme
 trListStmt (StIf t s1 s2 : xs) m f i =
   let (t1, i1) = trListStmt (s1 : xs) m f i
       (t2, i2) = trListStmt (s2 : xs) m f i
-   in (ITmIf (trTm t) t1 t2, i ++ i1 ++ i2)
+   in (convIf (trTm t) t1 t2, i ++ i1 ++ i2)
 trListStmt (StDeclAssign (Just ty) x t : xs) m f i =
   let (t', i') = trListStmt xs (M.insert x ty m) f i
    in (ITmLet x (Just (trTy ty)) (trTm t) t', i ++ i')
@@ -98,7 +101,19 @@ defInner condition body fname retty tl ps =
     { funcName = fname,
       funcArgs = ps,
       funcRetTy = retty,
-      funcBody = StIf (PTmNot condition) (StBlock tl) (StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))])
+      funcBody = StSwitch Switch {
+        switchOn = [condition], 
+        cases = [
+          Case {
+            caseOn = [PTmCon "No" [PTmVar "noprf"]], 
+            caseBody = StBlock tl
+          },
+          Case {
+            caseOn = [PTmCon "Yes" [PTmVar "yesprf"]],
+            caseBody = StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))]
+          }
+        ]
+      }
     }
 
 trTy :: PTy -> ITy
@@ -111,20 +126,6 @@ trTy PTyCustom {tyName, tyParams} = ITyCustom tyName (map trTm tyParams)
 trTy (PTyPTm t) = ITyTm (trTm t)
 trTy (PTyList t) = ITyList (trTy t)
 trTy PTyHole = ITyHole
-
--- trSwitch :: Switch -> ITm
--- trSwitch Switch {switchOn, cases} =
---   let branches = map (\(Case {caseOn, caseBody}) -> (map trTm caseOn, trTm caseBody)) cases
---    in ITmMatch
---         (map trTm switchOn)
---         branches
-
--- trProg :: Prog -> IProg
--- trProg = map trProgEl
-
--- trProgEl :: ProgEl -> IProgEl
--- trProgEl (PDecl decl) = IIDecl $ trDecl decl
--- trProgEl (PFunc func) = IIFunc $ trFunc (doShadowing func)
 
 trDecl :: Decl -> IDecl
 trDecl (PTy tydecl) = ITy $ trTyDecl tydecl

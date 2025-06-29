@@ -68,7 +68,7 @@ data IDecl = ITy ITyDecl | IRec IRecDecl
 
 type IProg = List IProgEl
 
-data IProgEl = IIDecl IDecl | IIFunc IFunc
+data IProgEl = IIDecl IDecl | IIFunc IFunc | IIImport String 
   deriving (Show, Eq)
 
 data IFunc = IFunc

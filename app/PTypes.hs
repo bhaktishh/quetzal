@@ -4,7 +4,7 @@ import GHC.TypeLits (Nat)
 
 type List a = [a]
 
-data ProgEl = PDecl Decl | PFunc Func
+data ProgEl = PDecl Decl | PFunc Func | PImport String 
   deriving (Show, Eq)
 
 type Prog = List ProgEl

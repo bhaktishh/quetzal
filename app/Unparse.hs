@@ -25,6 +25,9 @@ uProg (x : xs) = case x of
     f <- uFuncs func
     pr <- uProg xs
     pure $ f ++ "\n\n" ++ pr
+  IIImport m -> do
+    pr <- uProg xs
+    pure $ "import " ++ m ++ "\n\n" ++ pr
 
 uTypes :: IDecl -> Indent String
 uTypes (ITy tdecl) = uTyDecl tdecl
@@ -156,13 +159,13 @@ uTm (ITmBEq n1 n2) = do
   t2 <- uTm n2
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ "(" ++ t1 ++ " == " ++ t2 ++ ")"
+  pure $ indent t ind ++ "(" ++ "decEq " ++ t1 ++ " " ++ t2 ++ ")"
 uTm (ITmBLT n1 n2) = do
   t1 <- uTm n1
   t2 <- uTm n2
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ "(" ++ t1 ++ " < " ++ t2 ++ ")"
+  pure $ indent t ind ++ "(" ++ "isLT " ++ t1 ++ " " ++ t2 ++ ")"
 uTm (ITmVar v) = do
   (ind, t) <- get
   put (ind, False)
@@ -174,9 +177,9 @@ uTm (ITmFuncCall f args) = do
   args <- mapM uTm args
   pure $ indent t ind ++ "(" ++ tm ++ (if null args then "" else " ") ++ unwords args ++ ")"
 uTm (ITmCon c args) = do
-  args <- mapM uTm args
   (ind, t) <- get
   put (ind, False)
+  args <- mapM uTm args
   pure $ indent t ind ++ c ++ (if null args then "" else " ") ++ unwords args
 uTm (ITmIf cond thenCase elseCase) = do
   (ind, t) <- get
@@ -229,11 +232,12 @@ uTm (ITmMatch on cases) = do
           (ind, t) <- get
           put (ind, False)
           xs <- mapM uTm xs
+          put (ind, False)
           v <- uTm v
           pure (xs, v)
       )
       cases
-  put (ind, False)
+  put (ind, t)
   pure $
     indent t ind
       ++ "case "
@@ -241,8 +245,11 @@ uTm (ITmMatch on cases) = do
       ++ intercalate "," on
       ++ ")"
       ++ " of\n"
-      ++ indent t (ind + 1)
-      ++ intercalate ("\n" ++ indent t (ind + 1)) (map (\(xs, tm) -> "(" ++ intercalate "," xs ++ ")" ++ " => " ++ tm) cases)
+      ++ indent True (ind + 1)
+      ++ intercalate
+        ("\n" ++ indent True (ind + 1))
+        (map (\(xs, tm) -> "(" ++ intercalate "," xs ++ ")" ++ " => " ++ tm) cases)
+uTm (ITmList t l) = undefined
 
 uFuncs :: IFunc -> Indent String
 uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do

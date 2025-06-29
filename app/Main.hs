@@ -35,6 +35,7 @@ processFile file = do
 doFuncs :: ProgEl -> IProgEl
 doFuncs (PFunc f) = IIFunc $ trFunc f
 doFuncs (PDecl x) = IIDecl $ trDecl x
+doFuncs (PImport x) = IIImport x
 
 writeIdris :: IProg -> String -> IO ()
 writeIdris p fpath = writeFile fpath (unparse p)

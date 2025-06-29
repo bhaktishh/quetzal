@@ -1,11 +1,16 @@
-func search (Nat n, Vect(n, Nat) v, Nat x) of Fin(n) {
-    let Fin(n) i = 0; 
-    let Fin(n) ret = n; 
-    while ((finToNat(i)) < n) {
-        if ((index(i, v)) == x) {
-            ret = i;
-        } else {;;}
-        i = i + 1; 
+import Data.Vect
+import Data.Nat
+import Decidable.Equality
+
+func search (Nat n, Vect(n, Nat) ls, Nat x) of Maybe(Fin(n)) {
+    let Nat i = 0;
+    let Maybe(Fin(n)) ret = Nothing; 
+    while(i < n) {
+        if ((index(natToFinLT(i), ls)) == x) {
+            ret = Just((natToFinLT(i))); 
+        }
+        else {;;}
+        i = 1 + i; 
     }
     return ret; 
 }

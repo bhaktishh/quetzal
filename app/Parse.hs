@@ -16,6 +16,7 @@ import Text.Megaparsec
     (<|>),
   )
 import Text.Megaparsec.Char
+import Data.List (intersperse, intercalate)
 
 type Parser = Parsec Void String
 
@@ -69,7 +70,13 @@ pTLDecl :: Parser Decl
 pTLDecl = (PTy <$> pTyDecl) <|> (Rec <$> pRecDecl)
 
 pProgEl :: Parser ProgEl
-pProgEl = pSpaces ((PDecl <$> pTLDecl) <|> (PFunc <$> pFunc))
+pProgEl = pSpaces (pImport <|> (PDecl <$> pTLDecl) <|> (PFunc <$> pFunc))
+
+pImport :: Parser ProgEl 
+pImport = do 
+    _ <- pSpaces $ string "import"
+    m <- pSpaces $ pUpperStr `sepBy` char '.'
+    pure $ PImport (intercalate "." m)
 
 pProg :: Parser Prog
 pProg = many (pSpaces pProgEl) <* eof
