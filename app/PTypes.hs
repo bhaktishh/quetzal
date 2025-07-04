@@ -67,9 +67,14 @@ data Stmt
       { condition :: PTm,
         body :: Stmt
       }
+  | StEWhile
+      { condition :: PTm,
+        body :: Stmt
+      }
   | StReturn PTm 
   | StIf PTm Stmt Stmt 
-  | StBlock (List Stmt) 
+  | StEIf PTm Stmt Stmt 
+  | StBlock (List Stmt)
   | StSwitch Switch 
   | StSkip
   deriving (Show, Eq)

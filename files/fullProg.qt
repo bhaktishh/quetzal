@@ -2,7 +2,8 @@ type Vect(Nat n, Ty t) {
     constructor Nil() of Vect(0, t);
     constructor Cons(t head, Vect(n, t) tail) of Vect(1+n, t);
 }
-type Pair(Ty a, Func(a x => Ty) p) {
+
+type Pair(Ty a, Func(a => Ty) p) {
     constructor MkPair (a x, p(t) y) of Pair(a, p);
 }
 
@@ -135,4 +136,15 @@ func search (Nat n, Vect(n, Nat) ls, Nat x) of Maybe(Fin(n)) {
         i = 1 + i; 
     }
     return ret; 
+}
+
+type Dir {
+    constructor Write of Dir;
+    constructor Read of Dir;
+}
+
+type Expr (Dir d) {
+    constructor Lam (String x, Expr(d) e) of Expr(Write);
+    constructor Val (Int i) of Expr(d); 
+    constructor Proc (String x) of Expr(Read); 
 }

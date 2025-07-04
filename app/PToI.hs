@@ -4,6 +4,7 @@ module PToI where
 
 import Data.List (nub)
 import qualified Data.Map as M
+import Data.Tuple (swap)
 import ITypes
 import PTypes
 
@@ -16,7 +17,6 @@ trTm (PTmNot t) = ITmNot (trTm t)
 trTm (PTmPTy t) = ITmTy (trTy t)
 trTm (PTmVar x) = ITmVar x
 trTm (PTmCon x cs) = ITmCon x (map trTm cs)
--- trTm (PTmFunc f) = ITmFunc $ unLoopFunc f
 trTm (PTmFuncCall f args) = ITmFuncCall (trTm f) (map trTm args)
 trTm (PTmIf c t e) = ITmIf (trTm c) (trTm t) (trTm e)
 trTm (PTmMinus t1 t2) = ITmMinus (trTm t1) (trTm t2)
@@ -33,8 +33,8 @@ convIf c t e = ITmMatch [c] [([ITmCon "No" [ITmVar "noprf"]], e), ([ITmCon "Yes"
 
 trBody :: Stmt -> Func -> (ITm, List ITm)
 trBody x f = case x of
-  StBlock ls -> trListStmt ls (mapFromFuncArgs (funcArgs f) M.empty) f []
-  _ -> trListStmt [x] (mapFromFuncArgs (funcArgs f) M.empty) f []
+  StBlock ls -> trListStmt ls (mapFromFuncArgs (funcArgs f) M.empty) (map (\x -> (getAnnParamVar x, getAnnParamPTy x)) (funcArgs f)) f []
+  _ -> trListStmt [x] (mapFromFuncArgs (funcArgs f) M.empty) (map (\x -> (getAnnParamVar x, getAnnParamPTy x)) (funcArgs f)) f []
 
 mapFromFuncArgs :: List AnnParam -> M.Map String PTy -> M.Map String PTy
 mapFromFuncArgs [] m = m
@@ -43,33 +43,41 @@ mapFromFuncArgs ((AnnParam (ty, var) _) : xs) m = mapFromFuncArgs xs (M.insert v
 mapToAnnParam :: M.Map String PTy -> List AnnParam
 mapToAnnParam m = map (\(v, ty) -> AnnParam (ty, v) True) (M.toList m)
 
-trListStmt :: List Stmt -> M.Map String PTy -> Func -> List ITm -> (ITm, List ITm)
-trListStmt [StSkip] _ _ _ = error "cannot end with skip i think"
-trListStmt (StSkip : xs) m f i = trListStmt xs m f i
-trListStmt [] _ _ i = (ITmUnit, i)
-trListStmt [StBlock s] m f i = trListStmt s m f i
-trListStmt (StBlock s : xs) m f i = trListStmt (s ++ xs) m f i
-trListStmt [StReturn t] _ _ i = (trTm t, i)
-trListStmt (StReturn t : _ : _) _ _ _ = error "return should be the last statement in the block"
-trListStmt (StIf t s1 s2 : xs) m f i =
-  let (t1, i1) = trListStmt (s1 : xs) m f i
-      (t2, i2) = trListStmt (s2 : xs) m f i
-   in (convIf (trTm t) t1 t2, i ++ i1 ++ i2)
-trListStmt (StDeclAssign (Just ty) x t : xs) m f i =
-  let (t', i') = trListStmt xs (M.insert x ty m) f i
+trListStmt :: List Stmt -> M.Map String PTy -> List (String, PTy) -> Func -> List ITm -> (ITm, List ITm)
+trListStmt [StSkip] _ _ _ _ = error "cannot end with skip i think"
+trListStmt (StSkip : xs) m ls f i = trListStmt xs m ls f i
+trListStmt [] _ _ _ i = (ITmUnit, i)
+trListStmt [StBlock s] m ls f i = trListStmt s m ls f i
+trListStmt (StBlock s : xs) m ls f i = trListStmt (s ++ xs) m ls f i
+trListStmt [StReturn t] _ _ _ i = (trTm t, i)
+trListStmt (StReturn t : _ : _) _ _ _ _ = error "return should be the last statement in the block"
+trListStmt (StIf t s1 s2 : xs) m ls f i =
+  let (t1, i1) = trListStmt (s1 : xs) m ls f i
+      (t2, i2) = trListStmt (s2 : xs) m ls f (i ++ i1)
+   in (ITmIf (trTm t) t1 t2, i ++ i2)
+trListStmt (StEIf t s1 s2 : xs) m ls f i =
+  let (t1, i1) = trListStmt (s1 : xs) m ls f i
+      (t2, i2) = trListStmt (s2 : xs) m ls f (i ++ i1)
+   in (convIf (trTm t) t1 t2, i ++ i2)
+trListStmt (StDeclAssign (Just ty) x t : xs) m ls f i =
+  let (t', i') = trListStmt xs (M.insert x ty m) (ls ++ [(x, ty)]) f i
    in (ITmLet x (Just (trTy ty)) (trTm t) t', i ++ i')
-trListStmt (StDeclAssign Nothing x t : xs) m f i =
-  let (t', i') = trListStmt xs (M.insert x PTyHole m) f i
+trListStmt (StDeclAssign Nothing x t : xs) m ls f i =
+  let (t', i') = trListStmt xs (M.insert x PTyHole m) (ls ++ [(x, PTyHole)]) f i
    in (ITmLet x Nothing (trTm t) t', i ++ i')
-trListStmt (StAssign x t : xs) m f i =
-  let (t', i') = trListStmt xs m f i
+trListStmt (StAssign x t : xs) m ls f i =
+  let (t', i') = trListStmt xs m ls f i
    in (ITmLet x (trTy <$> M.lookup x m) (trTm t) t', i ++ i')
-trListStmt (StWhile t s : xs) m f i =
-  let (body, innerName, innerParams) = defOuter (funcName f) (funcArgs f ++ mapToAnnParam m) (length i)
-      innerFunc = defInner t s innerName (funcRetTy f) xs innerParams
+trListStmt (StWhile t s : xs) m ls f i =
+  let (body, innerName, innerParams) = defOuter (funcName f) (funcArgs f ++ map ((`AnnParam` True) . swap) ls) (length i)
+      innerFunc = defInner t s innerName (funcRetTy f) xs innerParams False
    in (\(x, y) -> (x, (ITmFunc $ trFunc innerFunc) : y)) (trBody body f)
-trListStmt (StSwitch Switch {switchOn, cases} : xs) m f i =
-  let tmp = map (\(Case {caseOn, caseBody}) -> (map trTm caseOn, trListStmt (caseBody : xs) m f i)) cases
+trListStmt (StEWhile t s : xs) m ls f i =
+  let (body, innerName, innerParams) = defOuter (funcName f) (funcArgs f ++ map ((`AnnParam` True) . swap) ls) (length i)
+      innerFunc = defInner t s innerName (funcRetTy f) xs innerParams True
+   in (\(x, y) -> (x, (ITmFunc $ trFunc innerFunc) : y)) (trBody body f)
+trListStmt (StSwitch Switch {switchOn, cases} : xs) m ls f i =
+  let tmp = map (\(Case {caseOn, caseBody}) -> (map trTm caseOn, trListStmt (caseBody : xs) m ls f i)) cases
       branches = map (\(tm, (st, i)) -> ((tm, st), i)) tmp
    in ( ITmMatch
           (map trTm switchOn)
@@ -77,15 +85,6 @@ trListStmt (StSwitch Switch {switchOn, cases} : xs) m f i =
         i ++ concatMap snd branches
       )
 
-getHVars :: List Stmt -> M.Map String (Maybe PTy) -> List (String, Maybe PTy)
-getHVars [] m = M.toList m
-getHVars (x : xs) m = case x of
-  StDeclAssign ty v _ -> getHVars xs (M.insert v ty m)
-  StAssign _ _ -> error "assignment should have been transformed"
-  StBlock _ -> error "todo"
-  _ -> getHVars xs m
-
--- todo may have to add the header
 defOuter :: String -> List AnnParam -> Int -> (Stmt, String, List AnnParam)
 defOuter funcName funcArgs i =
   let funcInner = funcName ++ "_rec" ++ show i
@@ -95,13 +94,9 @@ defOuter funcName funcArgs i =
         ps
       )
 
-defInner :: PTm -> Stmt -> String -> PTy -> List Stmt -> List AnnParam -> Func
-defInner condition body fname retty tl ps =
-  Func
-    { funcName = fname,
-      funcArgs = ps,
-      funcRetTy = retty,
-      funcBody =
+defInner :: PTm -> Stmt -> String -> PTy -> List Stmt -> List AnnParam -> Bool -> Func
+defInner condition body fname retty tl ps e =
+  let ebdy =
         StSwitch
           Switch
             { switchOn = [condition],
@@ -116,7 +111,13 @@ defInner condition body fname retty tl ps =
                     }
                 ]
             }
-    }
+      bdy = StIf condition (StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))]) (StBlock tl)
+   in Func
+        { funcName = fname,
+          funcArgs = ps,
+          funcRetTy = retty,
+          funcBody = if e then ebdy else bdy
+        }
 
 trTy :: PTy -> ITy
 trTy PTyNat = ITyNat
@@ -200,7 +201,61 @@ getAnnParamPTy :: AnnParam -> PTy
 getAnnParamPTy (AnnParam (ty, _) _) = ty
 
 nubAnnParam :: M.Map String (PTy, Bool) -> List AnnParam -> List AnnParam -> List AnnParam
-nubAnnParam m [] lnew = lnew
+nubAnnParam _ [] lnew = lnew
 nubAnnParam m (x@(AnnParam (ty, v) vis) : xs) lnew = case M.lookup v m of
   Nothing -> nubAnnParam (M.insert v (ty, vis) m) xs (lnew ++ [x])
   Just _ -> nubAnnParam m xs lnew
+
+getIAnnParamVar :: IAnnParam -> String
+getIAnnParamVar (IAnnParam (str, _) _) = str
+
+deriveDecEq :: ITyDecl -> IImplementation
+deriveDecEq
+  ITyDecl
+    { iTyDeclName,
+      iTyDeclParams,
+      iTyDeclConstructors = [c]
+    } =
+    let tms i = ITmCon (iConName c) (map (ITmVar . (++ i) . getIAnnParamVar) iTyDeclParams)
+     in IImplementation
+          { iConstraints = getConstraints iTyDeclParams,
+            iSubject = ITmCon "DecEq" [ITmCon iTyDeclName (map (ITmVar . getIAnnParamVar) (iConArgs c))],
+            iBody = [getCase (tms "1", tms "2")]
+          }
+deriveDecEq
+  ITyDecl
+    { iTyDeclName,
+      iTyDeclParams,
+      iTyDeclConstructors
+    } =
+    let cases = generateCases iTyDeclConstructors
+        tms i c = ITmCon (iConName c) (map (ITmVar . (++ i) . getIAnnParamVar) (iConArgs c))
+     in IImplementation
+          { iConstraints = getConstraints iTyDeclParams,
+            iSubject = ITmCon "DecEq" [ITmCon iTyDeclName (map (ITmVar . getIAnnParamVar) iTyDeclParams)],
+            iBody = map (getCase . \(x, y) -> (tms "1" x, tms "2" y)) cases
+          }
+
+getConstraints :: List IAnnParam -> List ITm
+getConstraints [] = []
+getConstraints (IAnnParam (v, ITyTy) _ : xs) = ITmCon "DecEq" [ITmVar v] : getConstraints xs
+getConstraints (IAnnParam (v, ITyFunc args) _ : xs) = undefined
+getConstraints (_ : xs) = getConstraints xs
+
+-- args to match on
+getCase :: (ITm, ITm) -> IImplCase
+getCase (ITmCon v1 args1, ITmCon v2 args2) = case (v1 == v2) of
+  True -> undefined
+  False -> undefined
+getCase _ = error "pls no"
+
+getWith :: ITm -> IImplCase
+getWith t = undefined
+
+-- takes in a list of constructors, returns the constructor pairs for each case
+generateCases :: List IConstructor -> List (IConstructor, IConstructor)
+generateCases [] = []
+generateCases (x : y : xs) =
+  let xfst = map ((,) x) (y : xs)
+   in xfst ++ (y, x) : (if null xs then [] else generateCases (y : xs))
+generateCases _ = error "bad"

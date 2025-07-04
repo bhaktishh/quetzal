@@ -36,6 +36,7 @@ data ITm
   | ITmIf ITm ITm ITm
   | ITmMatch (List ITm) (List (List ITm, ITm))
   | ITmLet String (Maybe ITy) ITm ITm
+  | ITmLam String ITm  
   deriving (Show, Eq)
 
 data IConstructor = IConstructor
@@ -79,3 +80,18 @@ data IFunc = IFunc
     iWhere :: List ITm
   }
   deriving (Show, Eq)
+
+data IImplementation = IImplementation {
+  iConstraints :: List ITm, 
+  iSubject :: ITm,
+  iBody :: IImplBody 
+}
+
+type IImplBody = List IImplCase
+
+data IImplCase = IImplCase {
+  iArgs :: (ITm, ITm), 
+  iBarArgs :: List ITm, 
+  iWith :: Maybe (ITm, IImplCase), 
+  iCaseBody :: ITm 
+}

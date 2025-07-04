@@ -247,6 +247,16 @@ pWhile = do
       { condition,
         body
       }
+pEWhile :: Parser Stmt
+pEWhile = do
+  _ <- pSpaces $ string "ewhile"
+  condition <- pSpaces $ pParens pPTm
+  body <- pSpaces $ pCurlies pStmt
+  pure $
+    StWhile
+      { condition,
+        body
+      }
 
 pStIf :: Parser Stmt
 pStIf = do
@@ -257,6 +267,15 @@ pStIf = do
   e <- pSpaces $ pCurlies pStmt
   pure $ StIf cond t e
 
+pStEIf :: Parser Stmt
+pStEIf = do
+  _ <- pSpaces $ string "eif"
+  cond <- pSpaces $ pParens pPTm
+  t <- pSpaces $ pCurlies pStmt
+  _ <- pSpaces $ string "else"
+  e <- pSpaces $ pCurlies pStmt
+  pure $ StEIf cond t e
+
 pStmt :: Parser Stmt
 pStmt = StBlock <$> some pStmt0
 
@@ -266,8 +285,10 @@ pStmt0 =
     <|> try pDeclAssign
     <|> try pAssign
     <|> try pWhile
+    <|> try pEWhile 
     <|> try pStReturn
     <|> try pStIf
+    <|> try pStEIf
     <|> try pStSwitch
 
 pPlusPTm :: Parser PTm

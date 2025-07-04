@@ -159,13 +159,15 @@ uTm (ITmBEq n1 n2) = do
   t2 <- uTm n2
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ "(" ++ "decEq " ++ t1 ++ " " ++ t2 ++ ")"
+  -- pure $ indent t ind ++ "(" ++ "decEq " ++ t1 ++ " " ++ t2 ++ ")"
+  pure $ indent t ind ++ "(" ++ t1 ++ " == " ++ t2 ++ ")"
 uTm (ITmBLT n1 n2) = do
   t1 <- uTm n1
   t2 <- uTm n2
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ "(" ++ "isLT " ++ t1 ++ " " ++ t2 ++ ")"
+  -- pure $ indent t ind ++ "(" ++ "isLT " ++ t1 ++ " " ++ t2 ++ ")"
+  pure $ indent t ind ++ "(" ++ t1 ++ " < " ++ t2 ++ ")"
 uTm (ITmVar v) = do
   (ind, t) <- get
   put (ind, False)
