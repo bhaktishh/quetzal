@@ -1,4 +1,16 @@
-type Vect(Nat n, Ty t) {
-    constructor Nil() of Vect(0, t);
-    constructor Cons(t head, Vect(n, t) tail) of Vect(1+n, t);
+import Data.Vect
+import Data.Nat
+import Decidable.Equality
+
+func search (Nat n, Vect(n, Nat) ls, Nat x) of Maybe(Fin(n)) {
+    let Nat i = 0;
+    let Maybe(Fin(n)) ret = Nothing; 
+    ewhile(i < n) {
+        eif ((index(natToFinLT(i), ls)) == x) {
+            ret = Just((natToFinLT(i))); 
+        }
+        else {;;}
+        i = 1 + i; 
+    }
+    return ret; 
 }

@@ -253,7 +253,7 @@ pEWhile = do
   condition <- pSpaces $ pParens pPTm
   body <- pSpaces $ pCurlies pStmt
   pure $
-    StWhile
+    StEWhile
       { condition,
         body
       }

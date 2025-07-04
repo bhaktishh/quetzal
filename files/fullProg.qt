@@ -128,8 +128,8 @@ import Decidable.Equality
 func search (Nat n, Vect(n, Nat) ls, Nat x) of Maybe(Fin(n)) {
     let Nat i = 0;
     let Maybe(Fin(n)) ret = Nothing; 
-    while(i < n) {
-        if ((index(natToFinLT(i), ls)) == x) {
+    ewhile(i < n) {
+        eif ((index(natToFinLT(i), ls)) == x) {
             ret = Just((natToFinLT(i))); 
         }
         else {;;}
