@@ -1,8 +1,11 @@
 {-# LANGUAGE NamedFieldPuns #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use if" #-}
 
 module PToI where
 
-import Data.List (nub)
+import Data.List (nub, unsnoc)
 import qualified Data.Map as M
 import Data.Tuple (swap)
 import ITypes
@@ -216,11 +219,11 @@ deriveDecEq
       iTyDeclParams,
       iTyDeclConstructors = [c]
     } =
-    let tms i = ITmCon (iConName c) (map (ITmVar . (++ i) . getIAnnParamVar) iTyDeclParams)
-     in IImplementation
+    let tms i = ITmCon (iConName c) (map (ITmVar . (++ i) . getIAnnParamVar) (iConArgs c))
+     in Impl
           { iConstraints = getConstraints iTyDeclParams,
-            iSubject = ITmCon "DecEq" [ITmCon iTyDeclName (map (ITmVar . getIAnnParamVar) (iConArgs c))],
-            iBody = [getCase (tms "1", tms "2")]
+            iSubject = ITmCon iTyDeclName (map (ITmVar . getIAnnParamVar) iTyDeclParams),
+            iBody = getCases (tms "1", tms "2")
           }
 deriveDecEq
   ITyDecl
@@ -230,32 +233,72 @@ deriveDecEq
     } =
     let cases = generateCases iTyDeclConstructors
         tms i c = ITmCon (iConName c) (map (ITmVar . (++ i) . getIAnnParamVar) (iConArgs c))
-     in IImplementation
+     in Impl
           { iConstraints = getConstraints iTyDeclParams,
-            iSubject = ITmCon "DecEq" [ITmCon iTyDeclName (map (ITmVar . getIAnnParamVar) iTyDeclParams)],
-            iBody = map (getCase . \(x, y) -> (tms "1" x, tms "2" y)) cases
+            iSubject = ITmCon iTyDeclName (map (ITmVar . getIAnnParamVar) iTyDeclParams),
+            iBody = concatMap (getCases . \(x, y) -> (tms "1" x, tms "2" y)) cases
           }
 
 getConstraints :: List IAnnParam -> List ITm
 getConstraints [] = []
 getConstraints (IAnnParam (v, ITyTy) _ : xs) = ITmCon "DecEq" [ITmVar v] : getConstraints xs
-getConstraints (IAnnParam (v, ITyFunc args) _ : xs) = undefined
+getConstraints (IAnnParam (v, ITyFunc args) _ : xs) = getFuncConstraint v args : getConstraints xs
 getConstraints (_ : xs) = getConstraints xs
 
--- args to match on
-getCase :: (ITm, ITm) -> IImplCase
-getCase (ITmCon v1 args1, ITmCon v2 args2) = case (v1 == v2) of
-  True -> undefined
-  False -> undefined
-getCase _ = error "pls no"
+getFuncConstraint :: String -> List (Maybe String, ITy) -> ITm
+getFuncConstraint v args = undefined
 
-getWith :: ITm -> IImplCase
-getWith t = undefined
+-- args to match on
+getCases :: (ITm, ITm) -> List IImplCase
+getCases (c1@(ITmCon v1 args1), c2@(ITmCon v2 args2)) = case v1 == v2 of
+  True -> case length args1 == length args2 of
+    True -> case null args1 of
+      True -> [mkCase (c1, c2) [] Nothing (Tm $ ITmCon "Yes" [ITmVar "Refl"])]
+      False ->
+        let pairedargs = zip args1 args2
+         in doEverything v1 [] ([], Nothing) pairedargs
+    False -> error "dawg dis is Wrong"
+  False -> [mkCase (c1, c2) [] Nothing (Tm $ noImpossible)]
+getCases _ = error "pls no"
+
+noImpossible :: ITm
+noImpossible = ITmCon "No" [ITmLam "h" (ITmMatchImpossible [ITmVar "h"] [ITmCon "Refl" []])]
+
+yesCon :: ITm
+yesCon = ITmCon "Yes" [ITmVar "Refl"]
+
+noCon :: String -> ITm
+noCon prf = ITmCon "No" [ITmVar "prf"]
+
+noConPrf :: String -> ITm
+noConPrf prf = ITmCon "No" [ITmLam "h" (ITmFuncCall (ITmVar prf) [ITmMatch [ITmVar "h"] [([ITmCon "Refl" []], ITmCon "Refl" [])]])]
+
+mkCons :: String -> List (ITm, ITm) -> (ITm, ITm)
+mkCons c args = (ITmCon c (map fst args), ITmCon c (map snd args))
+
+--              cname     prevargs            curBar with last prf   remaining
+doEverything :: String -> List (ITm, ITm) -> (List ITm, Maybe String) -> List (ITm, ITm) -> IImplBody
+doEverything cname prevargs (curbar, Nothing) [] = [mkCase (mkCons cname prevargs) curbar Nothing (Tm yesCon)]
+doEverything cname prevargs (curbar, Just prf) _ = [mkCase (mkCons cname prevargs) curbar Nothing (Tm $ noConPrf prf)]
+doEverything cname prevargs (curbar, Nothing) ((x1, x2) : xs) =
+  let yesCase = doEverything cname (prevargs ++ [(x1, x1)]) (curbar ++ [yesCon], Nothing) xs
+      noCase = mkCase (mkCons cname (prevargs ++ [(x1, x2)] ++ xs)) (curbar ++ [noCon "prf"]) Nothing (Tm $ noConPrf "prf")
+   in [mkCase (mkCons cname (prevargs ++ [(x1, x2)] ++ xs)) curbar (Just (ITmFuncCall (ITmVar "decEq") [x1, x2])) (Nest (yesCase ++ [noCase]))]
+
+mkCase :: (ITm, ITm) -> List ITm -> Maybe ITm -> IImplCaseBody -> IImplCase
+mkCase iArgs iBarArgs iWith iCaseBody =
+  IImplCase
+    { iArgs,
+      iWith,
+      iBarArgs,
+      iCaseBody
+    }
 
 -- takes in a list of constructors, returns the constructor pairs for each case
 generateCases :: List IConstructor -> List (IConstructor, IConstructor)
 generateCases [] = []
 generateCases (x : y : xs) =
-  let xfst = map ((,) x) (y : xs)
-   in xfst ++ (y, x) : (if null xs then [] else generateCases (y : xs))
+  let xfst = (x, x) : map ((,) x) (filter (\x' -> iConTy x' == iConTy x) (y : xs))
+      xfst' = if iConTy y == iConTy x then xfst ++ [(y, x)] else xfst
+   in xfst' ++ (if null xs then [(y, y)] else generateCases (y : xs))
 generateCases _ = error "bad"

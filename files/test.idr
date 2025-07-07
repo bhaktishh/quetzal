@@ -1,23 +1,15 @@
-import Data.Vect
+data Vect : (n : Nat) -> (t : Type) -> Type where 
+	Nil : Vect 0 t
+	Cons : (head : t) -> (tail : Vect n t) -> Vect (S n) t
 
-import Data.Nat
 
-import Decidable.Equality
-
-search : (n : Nat) -> (ls : Vect n Nat) -> (x : Nat) -> Maybe (Fin n)
-search n ls x = 
-	let i : Nat = 0 in
-		let ret : Maybe (Fin n) = Nothing in
-			(search_rec0 n ls x i ret)
-where 
-	search_rec0 : (n : Nat) -> (ls : Vect n Nat) -> (x : Nat) -> (i : Nat) -> (ret : Maybe (Fin n)) -> Maybe (Fin n)
-	search_rec0 n ls x i ret = 
-		case ((i < n)) of
-			(No noprf) => ret
-			(Yes yesprf) => case (((index (natToFinLT i) ls) == x)) of
-				(No noprf) => let i : Nat = (S i) in
-					(search_rec0 n ls x i ret)
-				(Yes yesprf) => let ret : Maybe (Fin n) = (Just (natToFinLT i)) in
-					let i : Nat = (S i) in
-						(search_rec0 n ls x i ret)
+(DecEq t) => DecEq (Vect n t) where 
+	decEq (Nil) (Nil) = Yes Refl
+	decEq (Cons head1 tail1) (Cons head2 tail2) with (decEq head1 head2)
+		decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl  with (decEq tail1 tail2)
+			decEq (Cons head1 tail1) (Cons head1 tail1) | Yes Refl | Yes Refl  = Yes Refl
+			decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+				(Refl) => Refl)))
+		decEq (Cons head1 tail1) (Cons head2 tail2) | No prf  = No (\h => (prf (case (h) of
+			(Refl) => Refl)))
 

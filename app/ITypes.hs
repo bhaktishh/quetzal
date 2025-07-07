@@ -35,8 +35,9 @@ data ITm
   | ITmFuncCall ITm (List ITm)
   | ITmIf ITm ITm ITm
   | ITmMatch (List ITm) (List (List ITm, ITm))
+  | ITmMatchImpossible (List ITm) (List ITm)
   | ITmLet String (Maybe ITy) ITm ITm
-  | ITmLam String ITm  
+  | ITmLam String ITm
   deriving (Show, Eq)
 
 data IConstructor = IConstructor
@@ -69,7 +70,7 @@ data IDecl = ITy ITyDecl | IRec IRecDecl
 
 type IProg = List IProgEl
 
-data IProgEl = IIDecl IDecl | IIFunc IFunc | IIImport String 
+data IProgEl = IIDecl IDecl | IIFunc IFunc | IIImport String
   deriving (Show, Eq)
 
 data IFunc = IFunc
@@ -81,17 +82,21 @@ data IFunc = IFunc
   }
   deriving (Show, Eq)
 
-data IImplementation = IImplementation {
-  iConstraints :: List ITm, 
-  iSubject :: ITm,
-  iBody :: IImplBody 
-}
+data IImplementation = Impl
+  { iConstraints :: List ITm,
+    iSubject :: ITm,
+    iBody :: IImplBody
+  }
+  deriving (Show, Eq)
 
 type IImplBody = List IImplCase
 
-data IImplCase = IImplCase {
-  iArgs :: (ITm, ITm), 
-  iBarArgs :: List ITm, 
-  iWith :: Maybe (ITm, IImplCase), 
-  iCaseBody :: ITm 
-}
+data IImplCase = IImplCase
+  { iArgs :: (ITm, ITm),
+    iBarArgs :: List ITm,
+    iWith :: Maybe ITm,
+    iCaseBody :: IImplCaseBody
+  }
+  deriving (Show, Eq)
+
+data IImplCaseBody = Tm ITm | Nest (List IImplCase) deriving (Show, Eq)

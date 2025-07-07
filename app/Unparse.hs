@@ -5,6 +5,7 @@ module Unparse where
 import Control.Monad.State.Lazy
 import Data.List (intercalate)
 import ITypes
+import PToI (deriveDecEq)
 
 type Indent a = State (Int, Bool) a
 
@@ -30,7 +31,10 @@ uProg (x : xs) = case x of
     pure $ "import " ++ m ++ "\n\n" ++ pr
 
 uTypes :: IDecl -> Indent String
-uTypes (ITy tdecl) = uTyDecl tdecl
+uTypes (ITy tdecl) = do
+  decl <- uTyDecl tdecl
+  impl <- uImplementation (deriveDecEq tdecl)
+  pure $ decl ++ "\n\n" ++ impl
 uTypes (IRec recdecl) = uRecDecl recdecl
 
 uRecDecl :: IRecDecl -> Indent String
@@ -242,7 +246,7 @@ uTm (ITmMatch on cases) = do
   put (ind, t)
   pure $
     indent t ind
-      ++ "case "
+      ++ "(case "
       ++ "("
       ++ intercalate "," on
       ++ ")"
@@ -251,7 +255,31 @@ uTm (ITmMatch on cases) = do
       ++ intercalate
         ("\n" ++ indent True (ind + 1))
         (map (\(xs, tm) -> "(" ++ intercalate "," xs ++ ")" ++ " => " ++ tm) cases)
+      ++ ")"
+uTm (ITmMatchImpossible on cases) = do
+  (ind, t) <- get
+  put (ind, False)
+  on <- mapM uTm on
+  cases <- mapM uTm cases
+  pure $
+    indent t ind
+      ++ "(case "
+      ++ "("
+      ++ intercalate "," on
+      ++ ")"
+      ++ " of "
+      ++ "("
+      ++ intercalate "," cases
+      ++ ")"
+      ++ " impossible"
+      ++ ")"
 uTm (ITmList t l) = undefined
+uTm (ITmLam v tm) = do
+  (ind, t) <- get
+  put (ind, False)
+  tm <- uTm tm
+  put (ind, t)
+  pure $ indent t ind ++ putParens ("\\" ++ v ++ " => " ++ tm)
 
 uFuncs :: IFunc -> Indent String
 uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
@@ -290,3 +318,58 @@ uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
           indent t ind
             ++ "\nwhere \n"
             ++ intercalate "\n where \n" deps
+
+uImplementation :: IImplementation -> Indent String
+uImplementation Impl {iConstraints, iSubject, iBody} = do
+  (ind, t) <- get
+  put (ind, False)
+  constraints <- mapM uTm iConstraints
+  subject <- uTm iSubject
+  put (ind + 1, True)
+  body <- mapM uImplCase iBody
+  pure $
+    indent t ind
+      ++ "("
+      ++ intercalate "," constraints
+      ++ ")"
+      ++ " => "
+      ++ "DecEq "
+      ++ putParens subject
+      ++ " where \n"
+      ++ intercalate ("\n") body
+
+doWith :: Maybe String -> String
+doWith Nothing = ""
+doWith (Just s) = " with " ++ s ++ "\n"
+
+uImplCase :: IImplCase -> Indent String
+uImplCase IImplCase {iArgs, iBarArgs, iWith, iCaseBody} = do
+  (ind, t) <- get
+  put (ind, False)
+  t1 <- uTm (fst iArgs)
+  t2 <- uTm (snd iArgs)
+  barArgs <- mapM uTm iBarArgs
+  let barArgs' = concatMap (" | " ++) barArgs
+  w <- mapM uTm iWith
+  let w' = doWith w
+  body <- uImplCaseBody iCaseBody
+  (ind, t) <- get
+  pure $
+    indent True ind ++ "decEq " ++ putParens t1 ++ " " ++ putParens t2 ++ barArgs' ++ (if null barArgs' then "" else " ") ++ w' ++ body
+
+uImplCaseBody :: IImplCaseBody -> Indent String
+uImplCaseBody (Tm tm) = do
+  (ind, t) <- get
+  put (ind, False)
+  tm' <- uTm tm
+  put (ind, t)
+  pure $ " = " ++ tm'
+uImplCaseBody (Nest tms) = do
+  (ind, t) <- get
+  put (ind + 1, True)
+  tms <- mapM uImplCase tms
+  put (ind, True)
+  pure $ intercalate "\n" tms
+
+putParens :: String -> String
+putParens s = "(" ++ s ++ ")"

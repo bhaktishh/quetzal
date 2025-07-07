@@ -2,6 +2,7 @@
 
 module Parse where
 
+import Data.List (intercalate, intersperse)
 import Data.Void (Void)
 import GHC.TypeLits (Nat)
 import PTypes
@@ -16,7 +17,6 @@ import Text.Megaparsec
     (<|>),
   )
 import Text.Megaparsec.Char
-import Data.List (intersperse, intercalate)
 
 type Parser = Parsec Void String
 
@@ -72,11 +72,11 @@ pTLDecl = (PTy <$> pTyDecl) <|> (Rec <$> pRecDecl)
 pProgEl :: Parser ProgEl
 pProgEl = pSpaces (pImport <|> (PDecl <$> pTLDecl) <|> (PFunc <$> pFunc))
 
-pImport :: Parser ProgEl 
-pImport = do 
-    _ <- pSpaces $ string "import"
-    m <- pSpaces $ pUpperStr `sepBy` char '.'
-    pure $ PImport (intercalate "." m)
+pImport :: Parser ProgEl
+pImport = do
+  _ <- pSpaces $ string "import"
+  m <- pSpaces $ pUpperStr `sepBy` char '.'
+  pure $ PImport (intercalate "." m)
 
 pProg :: Parser Prog
 pProg = many (pSpaces pProgEl) <* eof
@@ -247,6 +247,7 @@ pWhile = do
       { condition,
         body
       }
+
 pEWhile :: Parser Stmt
 pEWhile = do
   _ <- pSpaces $ string "ewhile"
@@ -285,7 +286,7 @@ pStmt0 =
     <|> try pDeclAssign
     <|> try pAssign
     <|> try pWhile
-    <|> try pEWhile 
+    <|> try pEWhile
     <|> try pStReturn
     <|> try pStIf
     <|> try pStEIf
