@@ -3,10 +3,9 @@ type Vect(Nat n, Ty t) {
     constructor Cons(t head, Vect(n, t) tail) of Vect(1+n, t);
 }
 
-type Pair(Ty a, Func(a => Ty) p) {
-    constructor MkPair (a x, p(t) y) of Pair(a, p);
+type MyPair(Ty a, Func(a x => Ty) p) {
+    constructor MkMyPair (a x, p(x) y) of MyPair(a, p);
 }
-
 record DPairRec(Ty t, Func(t a => Ty) p) {
     t fst; 
     p(fst) snd;

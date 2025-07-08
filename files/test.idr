@@ -1,15 +1,13 @@
-data Vect : (n : Nat) -> (t : Type) -> Type where 
-	Nil : Vect 0 t
-	Cons : (head : t) -> (tail : Vect n t) -> Vect (S n) t
+data MyPair : (a : Type) -> (p : (x : a) -> Type) -> Type where 
+	MkMyPair : (x : a) -> (y : (p x)) -> MyPair a p
 
 
-(DecEq t) => DecEq (Vect n t) where 
-	decEq (Nil) (Nil) = Yes Refl
-	decEq (Cons head1 tail1) (Cons head2 tail2) with (decEq head1 head2)
-		decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl  with (decEq tail1 tail2)
-			decEq (Cons head1 tail1) (Cons head1 tail1) | Yes Refl | Yes Refl  = Yes Refl
-			decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+(DecEq a,(x : a) -> DecEq (p x)) => DecEq (MyPair a p) where 
+	decEq (MkMyPair x1 y1) (MkMyPair x2 y2) with (decEq x1 x2)
+		decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl  with (decEq y1 y2)
+			decEq (MkMyPair x1 y1) (MkMyPair x1 y1) | Yes Refl | Yes Refl  = Yes Refl
+			decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
 				(Refl) => Refl)))
-		decEq (Cons head1 tail1) (Cons head2 tail2) | No prf  = No (\h => (prf (case (h) of
+		decEq (MkMyPair x1 y1) (MkMyPair x2 y2) | No prf  = No (\h => (prf (case (h) of
 			(Refl) => Refl)))
 

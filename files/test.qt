@@ -1,4 +1,3 @@
-type Vect(Nat n, Ty t) {
-    constructor Nil() of Vect(0, t);
-    constructor Cons(t head, Vect(n, t) tail) of Vect(1+n, t);
+type MyPair(Ty a, Func(a x => Ty) p) {
+    constructor MkMyPair (a x, p(x) y) of MyPair(a, p);
 }

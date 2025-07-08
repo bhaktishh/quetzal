@@ -242,11 +242,14 @@ deriveDecEq
 getConstraints :: List IAnnParam -> List ITm
 getConstraints [] = []
 getConstraints (IAnnParam (v, ITyTy) _ : xs) = ITmCon "DecEq" [ITmVar v] : getConstraints xs
-getConstraints (IAnnParam (v, ITyFunc args) _ : xs) = getFuncConstraint v args : getConstraints xs
+getConstraints (IAnnParam (v, ITyFunc args) _ : xs) = getFuncConstraint v args [] [] : getConstraints xs
 getConstraints (_ : xs) = getConstraints xs
 
-getFuncConstraint :: String -> List (Maybe String, ITy) -> ITm
-getFuncConstraint v args = undefined
+getFuncConstraint :: String -> List (Maybe String, ITy) -> List (Maybe String, ITy) -> List String -> ITm
+getFuncConstraint fv args acc facc = case unsnoc args of
+  Just (xs, x@(Just v, _)) -> getFuncConstraint fv xs (acc ++ [x]) (facc ++ [v])
+  Just (xs, x@(Nothing, ty)) -> getFuncConstraint fv xs acc facc
+  Nothing -> ITmTy (ITyFunc (acc ++ [(Nothing, ITyTm $ ITmCon "DecEq" [ITmFuncCall (ITmVar fv) (map ITmVar facc)])]))
 
 -- args to match on
 getCases :: (ITm, ITm) -> List IImplCase
@@ -258,7 +261,7 @@ getCases (c1@(ITmCon v1 args1), c2@(ITmCon v2 args2)) = case v1 == v2 of
         let pairedargs = zip args1 args2
          in doEverything v1 [] ([], Nothing) pairedargs
     False -> error "dawg dis is Wrong"
-  False -> [mkCase (c1, c2) [] Nothing (Tm $ noImpossible)]
+  False -> [mkCase (c1, c2) [] Nothing (Tm noImpossible)]
 getCases _ = error "pls no"
 
 noImpossible :: ITm
@@ -268,7 +271,7 @@ yesCon :: ITm
 yesCon = ITmCon "Yes" [ITmVar "Refl"]
 
 noCon :: String -> ITm
-noCon prf = ITmCon "No" [ITmVar "prf"]
+noCon prf = ITmCon "No" [ITmVar prf]
 
 noConPrf :: String -> ITm
 noConPrf prf = ITmCon "No" [ITmLam "h" (ITmFuncCall (ITmVar prf) [ITmMatch [ITmVar "h"] [([ITmCon "Refl" []], ITmCon "Refl" [])]])]

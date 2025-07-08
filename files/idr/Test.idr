@@ -1,7 +1,7 @@
 import Decidable.Equality
 
-data MyPair : (a : Type) -> (p : (x : a) -> Type) -> Type where 
-	MkMyPair : (x : a) -> (pf : p x) -> MyPair a p
+-- data MyPair : (a : Type) -> (p : (x : a) -> Type) -> Type where 
+-- 	MkMyPair : (x : a) -> (pf : p x) -> MyPair a p
 
 -- data MyCurse : (a : Type) -> (b : (x : a) -> Type) -> (p : (x : a) -> (y : b x) -> Type) -> Type where
 -- 	MkMyCurse : (x : a) -> (y : b x) -> (pf : p x y) -> MyCurse a b p
@@ -14,12 +14,25 @@ data MyPair : (a : Type) -> (p : (x : a) -> Type) -> Type where
 -- sndInjective : {x : a} -> {y : a} -> {px : p x} -> {py : p y} -> (MkMyPair {p = p} x px = MkMyPair {p = p} y py) -> (px = py)
 -- sndInjective Refl = Refl
 
-implementation (DecEq a, (x : a) -> DecEq (p x)) => DecEq (MyPair a p) where 
-	decEq (MkMyPair x px) (MkMyPair y py) with (decEq x y) 
-		decEq (MkMyPair x px) (MkMyPair x py) | Yes Refl with (decEq px py)
-			decEq (MkMyPair x px) (MkMyPair x px) | Yes Refl | Yes Refl = Yes Refl 
-			decEq (MkMyPair x px) (MkMyPair x py) | (Yes Refl) | (No prf) = No $ (\h => prf (case h of Refl => Refl))
-		decEq (MkMyPair x px) (MkMyPair y py) | No prf = No $ (\h => prf (case h of Refl => Refl))
+-- implementation (DecEq a, (x : a) -> DecEq (p x)) => DecEq (MyPair a p) where 
+-- 	decEq (MkMyPair x px) (MkMyPair y py) with (decEq x y) 
+-- 		decEq (MkMyPair x px) (MkMyPair x py) | Yes Refl with (decEq px py)
+-- 			decEq (MkMyPair x px) (MkMyPair x px) | Yes Refl | Yes Refl = Yes Refl 
+-- 			decEq (MkMyPair x px) (MkMyPair x py) | (Yes Refl) | (No prf) = No $ (\h => prf (case h of Refl => Refl))
+-- 		decEq (MkMyPair x px) (MkMyPair y py) | No prf = No $ (\h => prf (case h of Refl => Refl))
+
+data MyPair : (a : Type) -> (p : (x : a) -> Type) -> Type where 
+	MkMyPair : (x : a) -> (y : (p x)) -> MyPair a p
+
+
+(DecEq a,(x : a) -> DecEq (p x)) => DecEq (MyPair a p) where 
+	decEq (MkMyPair x1 y1) (MkMyPair x2 y2) with (decEq x1 x2)
+		decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl  with (decEq y1 y2)
+			decEq (MkMyPair x1 y1) (MkMyPair x1 y1) | Yes Refl | Yes Refl  = Yes Refl
+			decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+				(Refl) => Refl)))
+		decEq (MkMyPair x1 y1) (MkMyPair x2 y2) | No prf  = No (\h => (prf (case (h) of
+			(Refl) => Refl)))
 
 data MyVect : (n : Nat) -> (t : Type) -> Type where 
 	MyNil : MyVect 0 t
