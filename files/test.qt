@@ -19,3 +19,11 @@ type MyEither (Ty a, Ty b) {
     constructor MyLeft(a x) of MyEither(a, b);
     constructor MyRight(b y) of MyEither(a, b);
 }
+
+type Test3 (Bool s) {
+    constructor C3(Bool s) of Test3(s);
+}
+
+type Test2 (Ty t) {
+    constructor C2(Bool s) of Test2(t);
+}

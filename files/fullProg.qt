@@ -20,8 +20,8 @@ type MyEither (Ty a, Ty b) {
     constructor MyRight(b y) of MyEither(a, b);
 }
 
-type Test (Bool s, Ty t) {
-    constructor C1(Bool s) of Test(s, t);
+type Test (Bool s) {
+    constructor C1(Bool s) of Test(s);
 }
 
 type Test (Ty t) {

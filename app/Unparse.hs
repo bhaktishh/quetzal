@@ -339,10 +339,8 @@ uImplementation Impl {iImplicits, iConstraints, iSubject, iBody} = do
   pure $
     indent t ind
       ++ concat implicits
-      ++ "("
-      ++ intercalate ", " constraints
-      ++ ")"
-      ++ " => "
+      ++ intercalate " => " (map putParens constraints)
+      ++ (if not (null constraints) then " => " else "")
       ++ "DecEq "
       ++ putParens subject
       ++ " where \n"

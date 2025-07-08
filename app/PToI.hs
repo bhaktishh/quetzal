@@ -220,6 +220,16 @@ dontDoTheseTypes =
     ITyTy
   ]
 
+inConTyTm :: String -> ITm -> Bool
+inConTyTm vname (ITmVar x) = vname == x
+inConTyTm vname (ITmCon _ xs) = any (inConTyTm vname) xs
+inConTyTm _ _ = False
+
+inConTy :: String -> ITy -> Bool
+inConTy vname (ITyCustom _ tms) = any (inConTyTm vname) tms
+inConTy vname (ITyTm tm) = inConTyTm vname tm
+inConTy _ _ = False
+
 deriveDecEq :: IDecl -> IImplementation
 deriveDecEq
   ( ITy
@@ -231,7 +241,7 @@ deriveDecEq
         )
     ) =
     let cases = generateCases iTyDeclConstructors
-        hasTyTy c = map (\(IAnnParam (v, ty) _) -> (v, ty `notElem` dontDoTheseTypes)) $ filter (\(IAnnParam (_, _) b) -> b) (iConArgs c)
+        hasTyTy c = map (\(IAnnParam (v, ty) _) -> (v, ty `notElem` dontDoTheseTypes && not (inConTy v (iConTy c)))) $ filter (\(IAnnParam (_, _) b) -> b) (iConArgs c)
         tms i c = ITmCon (iConName c) (map (\(v, b) -> if b then ITmVar (v ++ i) else ITmVar v) (hasTyTy c))
         implicits = map (\(IAnnParam (v, ty) _) -> IAnnParam (v, ty) False) iTyDeclParams
      in Impl
