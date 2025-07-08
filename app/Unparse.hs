@@ -20,8 +20,12 @@ uProg [] = pure ""
 uProg (x : xs) = case x of
   IIDecl decl -> do
     dec <- uTypes decl
+    (ind, t) <- get
+    put (ind, False)
+    impl <- uImplementation (deriveDecEq decl)
+    put (ind, t)
     prog <- uProg xs
-    pure $ dec ++ "\n\n" ++ prog
+    pure $ dec ++ "\n\n" ++ impl ++ "\n\n" ++ prog
   IIFunc func -> do
     f <- uFuncs func
     pr <- uProg xs
@@ -31,16 +35,14 @@ uProg (x : xs) = case x of
     pure $ "import " ++ m ++ "\n\n" ++ pr
 
 uTypes :: IDecl -> Indent String
-uTypes (ITy tdecl) = do
-  decl <- uTyDecl tdecl
-  impl <- uImplementation (deriveDecEq tdecl)
-  pure $ decl ++ "\n\n" ++ impl
+uTypes (ITy tdecl) = uTyDecl tdecl
 uTypes (IRec recdecl) = uRecDecl recdecl
 
 uRecDecl :: IRecDecl -> Indent String
 uRecDecl
   IRecDecl
     { iRecDeclName,
+      iRecDeclConstructor,
       iRecDeclParams,
       iRecDeclFields
     } =
@@ -54,8 +56,8 @@ uRecDecl
           ++ " "
           ++ concat params
           ++ "where \n"
-          ++ "\tconstructor Mk"
-          ++ iRecDeclName
+          ++ "\tconstructor "
+          ++ iRecDeclConstructor
           ++ "\n"
           ++ concat fields
 
@@ -97,7 +99,10 @@ uTyDeclConstructor IConstructor {iConName, iConArgs, iConTy} =
 
 uAnnParam :: Bool -> IAnnParam -> Indent String
 uAnnParam arrow (IAnnParam (var, ty) vis) = do
+  (ind, tt) <- get
+  put (ind, False)
   t <- uTy ty
+  put (ind, tt)
   pure $ (if vis then "(" else "{") ++ var ++ " : " ++ t ++ (if vis then ")" else "}") ++ (if arrow then " -> " else " ")
 
 uTy :: ITy -> Indent String
@@ -106,7 +111,10 @@ uTy ITyBool = pure "Bool"
 uTy ITyTy = pure "Type"
 uTy ITyUnit = pure "()"
 uTy (ITyCustom name params) = do
+  (ind, t) <- get
+  put (ind, False)
   params <- mapM uTm params
+  put (ind, t)
   pure $ name ++ " " ++ unwords params
 uTy (ITyFunc args) = do
   args <- mapM uFuncArg args
@@ -320,23 +328,25 @@ uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
             ++ intercalate "\n where \n" deps
 
 uImplementation :: IImplementation -> Indent String
-uImplementation Impl {iConstraints, iSubject, iBody} = do
+uImplementation Impl {iImplicits, iConstraints, iSubject, iBody} = do
   (ind, t) <- get
   put (ind, False)
+  implicits <- mapM (uAnnParam True) iImplicits
   constraints <- mapM uTm iConstraints
   subject <- uTm iSubject
   put (ind + 1, True)
   body <- mapM uImplCase iBody
   pure $
     indent t ind
+      ++ concat implicits
       ++ "("
-      ++ intercalate "," constraints
+      ++ intercalate ", " constraints
       ++ ")"
       ++ " => "
       ++ "DecEq "
       ++ putParens subject
       ++ " where \n"
-      ++ intercalate ("\n") body
+      ++ intercalate "\n" body
 
 doWith :: Maybe String -> String
 doWith Nothing = ""

@@ -83,7 +83,8 @@ data IFunc = IFunc
   deriving (Show, Eq)
 
 data IImplementation = Impl
-  { iConstraints :: List ITm,
+  { iImplicits :: List IAnnParam, 
+    iConstraints :: List ITm,
     iSubject :: ITm,
     iBody :: IImplBody
   }
