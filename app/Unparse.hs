@@ -141,7 +141,7 @@ uTm (ITmPlus n1 n2) = do
   put (ind, False)
   t1 <- uTm n1
   t2 <- uTm n2
-  pure $ indent t ind ++ "(" ++ (if n1 == ITmNat 1 then "S " else t1 ++ " + ") ++ t2 ++ ")"
+  pure $ indent t ind ++ "(" ++ t1 ++ " + " ++ t2 ++ ")"
 uTm (ITmMinus n1 n2) = do
   t1 <- uTm n1
   t2 <- uTm n2
@@ -194,7 +194,7 @@ uTm (ITmCon c args) = do
   (ind, t) <- get
   put (ind, False)
   args <- mapM uTm args
-  pure $ indent t ind ++ c ++ (if null args then "" else " ") ++ unwords args
+  pure $ indent t ind ++ "(" ++ c ++ (if null args then "" else " ") ++ unwords args ++ ")"
 uTm (ITmIf cond thenCase elseCase) = do
   (ind, t) <- get
   put (ind, False)

@@ -13,7 +13,12 @@ import PTypes
 
 trTm :: PTm -> ITm
 trTm (PTmNat n) = ITmNat n
-trTm (PTmPlus t1 t2) = ITmPlus (trTm t1) (trTm t2)
+trTm (PTmPlus t1 t2) = let 
+  t1' = trTm t1 
+  t2' = trTm t2
+  tS = ITmCon "S"
+  in 
+  if t1' == ITmNat 1 then tS [t2'] else ITmPlus t1' t2'
 trTm (PTmBool b) = ITmBool b
 trTm PTmUnit = ITmUnit
 trTm (PTmNot t) = ITmNot (trTm t)
@@ -223,6 +228,7 @@ dontDoTheseTypes =
 inConTyTm :: String -> ITm -> Bool
 inConTyTm vname (ITmVar x) = vname == x
 inConTyTm vname (ITmCon _ xs) = any (inConTyTm vname) xs
+inConTyTm vname (ITmFuncCall _ xs) = any (inConTyTm vname) xs
 inConTyTm _ _ = False
 
 inConTy :: String -> ITy -> Bool

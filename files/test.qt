@@ -1,29 +1,3 @@
-type Vect(Nat n, Ty t) {
-    constructor Nil() of Vect(0, t);
-    constructor Cons(t head, Vect(n, t) tail) of Vect(1+n, t);
-}
-
-type Test(Ty a, Ty z, Func(Ty z, x a => Ty) p) {
-    constructor MkTest(a x, Ty z, p(z, x) pf) of Test(a, z, p);
-}
-
-type MyPair(Ty a, Func(a x => Ty) p) {
-    constructor MkMyPair (a x, p(x) y) of MyPair(a, p);
-}
-
-type MyCurse(Ty a, Func(a x => Ty) b, Func(a x, b(x) y => Ty) p) {
-    constructor MkMyCurse<Ty a, Func(a x => Ty) b, Func(a x, b(x) y => Ty) p>(a x, b(x) y, p(x, y) pf) of MyCurse(a, b, p);
-}
-
-type MyEither (Ty a, Ty b) {
-    constructor MyLeft(a x) of MyEither(a, b);
-    constructor MyRight(b y) of MyEither(a, b);
-}
-
-type Test3 (Bool s) {
-    constructor C3(Bool s) of Test3(s);
-}
-
-type Test2 (Ty t) {
-    constructor C2(Bool s) of Test2(t);
+type Test3 (Nat n, Ty t) {
+    constructor CTest3 (Nat n, t x, Test3(n, t) xs) of Test3(1+n, t);
 }
