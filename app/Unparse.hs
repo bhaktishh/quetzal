@@ -363,7 +363,7 @@ uImplCase IImplCase {iArgs, iBarArgs, iWith, iCaseBody} = do
   body <- uImplCaseBody iCaseBody
   (ind, t) <- get
   pure $
-    indent True ind ++ "decEq " ++ putParens t1 ++ " " ++ putParens t2 ++ barArgs' ++ (if null barArgs' then "" else " ") ++ w' ++ body
+    indent True ind ++ "decEq " ++ t1 ++ " " ++ t2 ++ barArgs' ++ (if null barArgs' then "" else " ") ++ w' ++ body
 
 uImplCaseBody :: IImplCaseBody -> Indent String
 uImplCaseBody (Tm tm) = do
