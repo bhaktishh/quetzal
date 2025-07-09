@@ -1,3 +1,11 @@
-type Test3 (Nat n, Ty t) {
-    constructor CTest3 (Nat n, t x, Test3(n, t) xs) of Test3(1+n, t);
+func test(Nat n) of Nat {
+    switch(n, n) {
+        case(0, 0) {
+            ;;
+        }
+        default {
+            n = 0;
+        }
+    }
+    return n;
 }

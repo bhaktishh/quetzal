@@ -17,6 +17,7 @@ data ITy
 
 data ITm
   = ITmNat Nat
+  | ITmWildCard 
   | ITmPlus ITm ITm
   | ITmMinus ITm ITm
   | ITmMult ITm ITm
@@ -24,6 +25,8 @@ data ITm
   | ITmMod ITm ITm
   | ITmBEq ITm ITm
   | ITmBLT ITm ITm
+  | ITmBAnd ITm ITm
+  | ITmBOr ITm ITm 
   | ITmBool Bool
   | ITmUnit
   | ITmNot ITm

@@ -3,6 +3,7 @@
 module Parse where
 
 import Data.List (intercalate, intersperse)
+import Data.Maybe (fromMaybe)
 import Data.Void (Void)
 import GHC.TypeLits (Nat)
 import PTypes
@@ -340,6 +341,20 @@ pTmBEq = do
   y <- pSpaces pPTm0
   pure $ PTmBEq x y
 
+pTmBAnd :: Parser PTm
+pTmBAnd = do
+  x <- pSpaces pPTm0
+  _ <- pSpaces $ string "&&"
+  y <- pSpaces pPTm0
+  pure $ PTmBAnd x y
+
+pTmBOr :: Parser PTm
+pTmBOr = do
+  x <- pSpaces pPTm0
+  _ <- pSpaces $ string "||"
+  y <- pSpaces pPTm0
+  pure $ PTmBOr x y
+
 pTmBLT :: Parser PTm
 pTmBLT = do
   x <- pSpaces pPTm0
@@ -363,6 +378,9 @@ pStReturn = do
 pPTmVar :: Parser PTm
 pPTmVar = PTmVar <$> pVar
 
+pPTmWildCard :: Parser PTm
+pPTmWildCard = pSpaces (char '_') >> pure PTmWildCard
+
 pFuncCall :: Parser PTm
 pFuncCall = do
   name <- pSpaces pPTm0
@@ -382,13 +400,27 @@ pStSwitch :: Parser Stmt
 pStSwitch = do
   _ <- pSpaces $ string "switch"
   switchOn <- pSpaces $ pParens $ pPTm `sepBy` char ','
-  cases <- pSpaces $ pCurlies $ many pCase
+  _ <- pSpaces $ char '{'
+  cases <- pSpaces $ many pCase
+  defaultCase <- pSpaces $ optional pDefault
+  _ <- pSpaces $ char '}'
   pure $
     StSwitch $
       Switch
         { switchOn,
-          cases
+          cases,
+          defaultCase
         }
+
+pDefault :: Parser Case
+pDefault = do
+  _ <- pSpaces $ string "default"
+  caseBody <- pSpaces $ pCurlies pStmt
+  pure $
+    Case
+      { caseOn = [],
+        caseBody
+      }
 
 pCase :: Parser Case
 pCase = do
@@ -457,6 +489,8 @@ pPTm1 =
     <|> try pTmMod
     <|> try pTmBEq
     <|> try pTmBLT
+    <|> try pTmBAnd
+    <|> try pTmBOr
     <|> try pFuncCall
     <|> try pPTmCon
     <|> try pIf
@@ -466,6 +500,7 @@ pPTm0 :: Parser PTm
 pPTm0 =
   try (pParens pPTm1)
     <|> try pPTmVar
+    <|> try pPTmWildCard
     <|> try pNat
     <|> try pBool
     <|> try pTmUnit

@@ -13,17 +13,17 @@ import PTypes
 
 trTm :: PTm -> ITm
 trTm (PTmNat n) = ITmNat n
-trTm (PTmPlus t1 t2) = let 
-  t1' = trTm t1 
-  t2' = trTm t2
-  tS = ITmCon "S"
-  in 
-  if t1' == ITmNat 1 then tS [t2'] else ITmPlus t1' t2'
+trTm (PTmPlus t1 t2) =
+  let t1' = trTm t1
+      t2' = trTm t2
+      tS = ITmCon "S"
+   in if t1' == ITmNat 1 then tS [t2'] else ITmPlus t1' t2'
 trTm (PTmBool b) = ITmBool b
 trTm PTmUnit = ITmUnit
 trTm (PTmNot t) = ITmNot (trTm t)
 trTm (PTmPTy t) = ITmTy (trTy t)
 trTm (PTmVar x) = ITmVar x
+trTm PTmWildCard = ITmWildCard
 trTm (PTmCon x cs) = ITmCon x (map trTm cs)
 trTm (PTmFuncCall f args) = ITmFuncCall (trTm f) (map trTm args)
 trTm (PTmIf c t e) = ITmIf (trTm c) (trTm t) (trTm e)
@@ -32,12 +32,30 @@ trTm (PTmMult t1 t2) = ITmMult (trTm t1) (trTm t2)
 trTm (PTmDiv t1 t2) = ITmDiv (trTm t1) (trTm t2)
 trTm (PTmMod t1 t2) = ITmMod (trTm t1) (trTm t2)
 trTm (PTmBEq t1 t2) = ITmBEq (trTm t1) (trTm t2)
+trTm (PTmBAnd t1 t2) = ITmBAnd (trTm t1) (trTm t2)
+trTm (PTmBOr t1 t2) = ITmBOr (trTm t1) (trTm t2)
 trTm (PTmBLT t1 t2) = ITmBLT (trTm t1) (trTm t2)
 trTm (PTmList t1 xs) = ITmList (trTy t1) (map trTm xs)
 trTm (PTmFunc f) = ITmFunc (trFunc f)
 
+trBool :: ITm -> ITm
+trBool (ITmBLT t1 t2) = ITmFuncCall (ITmVar "isLT") [t1, t2]
+trBool (ITmBEq t1 t2) = ITmFuncCall (ITmVar "decEq") [t1, t2]
+trBool (ITmBAnd t1 t2) = ITmBAnd (trBool t1) (trBool t2)
+trBool (ITmBOr t1 t2) = ITmBOr (trBool t1) (trBool t2)
+trBool (ITmNot t) = ITmNot (trBool t)
+trBool x = x
+
+trPBool :: PTm -> PTm
+trPBool (PTmBLT t1 t2) = PTmFuncCall (PTmVar "isLT") [t1, t2]
+trPBool (PTmBEq t1 t2) = PTmFuncCall (PTmVar "decEq") [t1, t2]
+trPBool (PTmBAnd t1 t2) = PTmBAnd (trPBool t1) (trPBool t2)
+trPBool (PTmBOr t1 t2) = PTmBOr (trPBool t1) (trPBool t2)
+trPBool (PTmNot t) = PTmNot (trPBool t)
+trPBool x = x
+
 convIf :: ITm -> ITm -> ITm -> ITm
-convIf c t e = ITmMatch [c] [([ITmCon "No" [ITmVar "noprf"]], e), ([ITmCon "Yes" [ITmVar "yesprf"]], t)]
+convIf c t e = ITmMatch [trBool c] [([ITmCon "No" [ITmVar "noprf"]], e), ([ITmCon "Yes" [ITmVar "yesprf"]], t)]
 
 trBody :: Stmt -> Func -> (ITm, List ITm)
 trBody x f = case x of
@@ -84,8 +102,11 @@ trListStmt (StEWhile t s : xs) m ls f i =
   let (body, innerName, innerParams) = defOuter (funcName f) (funcArgs f ++ map ((`AnnParam` True) . swap) ls) (length i)
       innerFunc = defInner t s innerName (funcRetTy f) xs innerParams True
    in (\(x, y) -> (x, (ITmFunc $ trFunc innerFunc) : y)) (trBody body f)
-trListStmt (StSwitch Switch {switchOn, cases} : xs) m ls f i =
-  let tmp = map (\(Case {caseOn, caseBody}) -> (map trTm caseOn, trListStmt (caseBody : xs) m ls f i)) cases
+trListStmt (StSwitch Switch {switchOn, cases, defaultCase} : xs) m ls f i =
+  let def = case defaultCase of
+        Nothing -> []
+        Just c -> [c]
+      tmp = map (\(Case {caseOn, caseBody}) -> (if null caseOn then replicate (length switchOn) ITmWildCard else map trTm caseOn, trListStmt (caseBody : xs) m ls f i)) (cases ++ def)
       branches = map (\(tm, (st, i)) -> ((tm, st), i)) tmp
    in ( ITmMatch
           (map trTm switchOn)
@@ -107,7 +128,7 @@ defInner condition body fname retty tl ps e =
   let ebdy =
         StSwitch
           Switch
-            { switchOn = [condition],
+            { switchOn = [trPBool condition],
               cases =
                 [ Case
                     { caseOn = [PTmCon "No" [PTmVar "noprf"]],
@@ -117,7 +138,8 @@ defInner condition body fname retty tl ps e =
                     { caseOn = [PTmCon "Yes" [PTmVar "yesprf"]],
                       caseBody = StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))]
                     }
-                ]
+                ],
+              defaultCase = Nothing
             }
       bdy = StIf condition (StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))]) (StBlock tl)
    in Func

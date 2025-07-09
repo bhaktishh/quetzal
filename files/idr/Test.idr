@@ -1,17 +1,37 @@
-import Decidable.Equality
+-- import Decidable.Equality
+-- import Data.Vect
 
-data Test3 : (n : Nat) -> (t : Type) -> Type where 
-	CTest3 : (n : Nat) -> (x : t) -> (xs : Test3 n t) -> Test3 (S n) t
+-- search : (n : Nat) -> (ls : Vect n (Nat)) -> (x : Nat) -> Maybe (Fin n)
+-- search n ls x = 
+-- 	let i : Nat = 0 in
+-- 		let ret : Maybe (Fin n) = (Nothing) in
+-- 			(search_rec0 n ls x i ret)
+-- where 
+-- 	search_rec0 : (n : Nat) -> (ls : Vect n (Nat)) -> (x : Nat) -> (i : Nat) -> (ret : Maybe (Fin n)) -> Maybe (Fin n)
+-- 	search_rec0 n ls x i ret = 
+-- 		(case ((isLT i n)) of
+-- 			((No noprf)) => ret
+-- 			((Yes yesprf)) => (case ((decEq (index (natToFinLT i) ls) x)) of
+-- 				((No noprf)) => let i : Nat = (S i) in
+-- 					(search_rec0 n ls x i ret)
+-- 				((Yes yesprf)) => let ret : Maybe (Fin n) = (Just (natToFinLT i)) in
+-- 					let i : Nat = (S i) in
+-- 						(search_rec0 n ls x i ret)))
+
+-- import Decidable.Equality
+
+-- data Test3 : (n : Nat) -> (t : Type) -> Type where 
+-- 	CTest3 : (n : Nat) -> (x : t) -> (xs : Test3 n t) -> Test3 (S n) t
 
 
-{n : Nat} -> {t : Type} -> ((DecEq t)) => DecEq ((Test3 n t)) where 
-	decEq ((CTest3 n x1 xs1)) ((CTest3 n x2 xs2)) with (decEq x1 x2)
-		decEq ((CTest3 n x1 xs1)) ((CTest3 n x1 xs2)) | (Yes Refl)  with (decEq xs1 xs2)
-			decEq ((CTest3 n x1 xs1)) ((CTest3 n x1 xs1)) | (Yes Refl) | (Yes Refl)  = (Yes Refl)
-			decEq ((CTest3 n x1 xs1)) ((CTest3 n x1 xs2)) | (Yes Refl) | (No prf)  = (No (\h => (prf (case (h) of
-				((Refl)) => (Refl)))))
-		decEq ((CTest3 n x1 xs1)) ((CTest3 n x2 xs2)) | (No prf)  = (No (\h => (prf (case (h) of
-			((Refl)) => (Refl)))))
+-- {n : Nat} -> {t : Type} -> ((DecEq t)) => DecEq ((Test3 n t)) where 
+-- 	decEq ((CTest3 n x1 xs1)) ((CTest3 n x2 xs2)) with (decEq x1 x2)
+-- 		decEq ((CTest3 n x1 xs1)) ((CTest3 n x1 xs2)) | (Yes Refl)  with (decEq xs1 xs2)
+-- 			decEq ((CTest3 n x1 xs1)) ((CTest3 n x1 xs1)) | (Yes Refl) | (Yes Refl)  = (Yes Refl)
+-- 			decEq ((CTest3 n x1 xs1)) ((CTest3 n x1 xs2)) | (Yes Refl) | (No prf)  = (No (\h => (prf (case (h) of
+-- 				((Refl)) => (Refl)))))
+-- 		decEq ((CTest3 n x1 xs1)) ((CTest3 n x2 xs2)) | (No prf)  = (No (\h => (prf (case (h) of
+-- 			((Refl)) => (Refl)))))
 
 
 
@@ -164,19 +184,19 @@ data Test3 : (n : Nat) -> (t : Type) -> Type where
 -- -- 			(Refl) => Refl)))
 
 
--- -- data Vect : (n : Nat) -> (t : Type) -> Type where 
--- -- 	Nil : Vect 0 t
--- -- 	Cons : (head : t) -> (tail : Vect n t) -> Vect (S n) t
+-- data Vect : (n : Nat) -> (t : Type) -> Type where 
+-- 	Nil : Vect 0 t
+-- 	Cons : (head : t) -> (tail : Vect n t) -> Vect (S n) t
 
--- -- {n : Nat} -> {t : Type} -> (DecEq t) => DecEq (Vect n t) where 
--- -- 	decEq (Nil) (Nil) = Yes Refl
--- -- 	decEq (Cons head1 tail1) (Cons head2 tail2) with (decEq head1 head2)
--- -- 		decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl  with (decEq tail1 tail2)
--- -- 			decEq (Cons head1 tail1) (Cons head1 tail1) | Yes Refl | Yes Refl  = Yes Refl
--- -- 			decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- -- 				(Refl) => Refl)))
--- -- 		decEq (Cons head1 tail1) (Cons head2 tail2) | No prf  = No (\h => (prf (case (h) of
--- -- 			(Refl) => Refl)))
+-- {n : Nat} -> {t : Type} -> (DecEq t) => DecEq (Vect n t) where 
+-- 	decEq (Nil) (Nil) = Yes Refl
+-- 	decEq (Cons head1 tail1) (Cons head2 tail2) with (decEq head1 head2)
+-- 		decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl  with (decEq tail1 tail2)
+-- 			decEq (Cons head1 tail1) (Cons head1 tail1) | Yes Refl | Yes Refl  = Yes Refl
+-- 			decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- 				(Refl) => Refl)))
+-- 		decEq (Cons head1 tail1) (Cons head2 tail2) | No prf  = No (\h => (prf (case (h) of
+-- 			(Refl) => Refl)))
 
 -- -- data MyEither : (a : Type) -> (b : Type) -> Type where 
 -- -- 	MyLeft : (x : a) -> MyEither a b

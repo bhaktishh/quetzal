@@ -53,6 +53,38 @@ func append<Nat n, Nat m, Ty t> (Vect(t, n) v1, Vect(t, m) v2) of Vect(t, n+m) {
     }
 }
 
+import Decidable.Equality
+import Data.Nat
+
+type Vect(Nat n, Ty t) {
+    constructor Nil() of Vect(0, t);
+    constructor Cons(t head, Vect(n, t) tail) of Vect(1+n, t);
+}
+
+func index (Fin(n) i, Vect(n, Nat) v) of Nat {
+    switch(i, v) {
+        case (FZ, Cons(t, ts)) {
+            return t; 
+        }
+        case (FS(k), Cons(t, ts)) {
+            return (index(k, ts));
+        }
+    }
+}
+
+func search (Nat n, Vect(n, Nat) ls, Nat x) of Maybe(Fin(n)) {
+    let Nat i = 0;
+    let Maybe(Fin(n)) ret = Nothing; 
+    ewhile(i < n) {
+        eif ((index(natToFinLT(i), ls)) == x) {
+            ret = Just((natToFinLT(i))); 
+        }
+        else {;;}
+        i = 1 + i; 
+    }
+    return ret; 
+}
+
 func replicate<Ty t>(t x, Nat n) of Vect(t, n) {
     switch(n) {
         case (0) {return Nil;}

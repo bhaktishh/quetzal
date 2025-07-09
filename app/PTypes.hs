@@ -36,12 +36,15 @@ data PTm
   | PTmMod PTm PTm
   | PTmBEq PTm PTm
   | PTmBLT PTm PTm
+  | PTmBAnd PTm PTm
+  | PTmBOr PTm PTm
   | PTmBool Bool
   | PTmList PTy (List PTm)
   | PTmUnit
   | PTmNot PTm
   | PTmPTy PTy
   | PTmVar String
+  | PTmWildCard
   | PTmCon String (List PTm)
   | PTmFunc Func
   | PTmFuncCall PTm (List PTm)
@@ -50,7 +53,8 @@ data PTm
 
 data Switch = Switch
   { switchOn :: List PTm,
-    cases :: List Case
+    cases :: List Case,
+    defaultCase :: Maybe Case
   }
   deriving (Show, Eq)
 
