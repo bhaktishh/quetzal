@@ -268,16 +268,18 @@ deriveDecEq
           }
         )
     ) =
-    let cases = generateCases iTyDeclConstructors
-        hasTyTy c = map (\(IAnnParam (v, ty) _) -> (v, ty `notElem` dontDoTheseTypes && not (inConTy v (iConTy c)))) $ filter (\(IAnnParam (_, _) b) -> b) (iConArgs c)
-        tms i c = ITmCon (iConName c) (map (\(v, b) -> if b then ITmVar (v ++ i) else ITmVar v) (hasTyTy c))
-        implicits = map (\(IAnnParam (v, ty) _) -> IAnnParam (v, ty) False) iTyDeclParams
-     in Impl
-          { iImplicits = implicits,
-            iConstraints = getConstraints iTyDeclParams,
-            iSubject = ITmCon iTyDeclName (map (ITmVar . getIAnnParamVar) iTyDeclParams),
-            iBody = concatMap (getCases . \(x, y) -> (tms "1" x, tms "2" y)) cases
-          }
+    case generateCases iTyDeclConstructors of
+      Nothing -> error "this type probably does not have decidable equality, soz"
+      Just cases ->
+        let hasTyTy c = map (\(IAnnParam (v, ty) _) -> (v, ty `notElem` dontDoTheseTypes && not (inConTy v (iConTy c)))) $ filter (\(IAnnParam (_, _) b) -> b) (iConArgs c)
+            tms i c = ITmCon (iConName c) (map (\(v, b) -> if b then ITmVar (v ++ i) else ITmVar v) (hasTyTy c))
+            implicits = map (\(IAnnParam (v, ty) _) -> IAnnParam (v, ty) False) iTyDeclParams
+         in Impl
+              { iImplicits = implicits,
+                iConstraints = getConstraints iTyDeclParams,
+                iSubject = ITmCon iTyDeclName (map (ITmVar . getIAnnParamVar) iTyDeclParams),
+                iBody = concatMap (getCases . \(x, y) -> (tms "1" x, tms "2" y)) cases
+              }
 deriveDecEq
   ( IRec
       ( IRecDecl
@@ -364,10 +366,21 @@ mkCase iArgs iBarArgs iWith iCaseBody =
     }
 
 -- takes in a list of constructors, returns the constructor pairs for each case
-generateCases :: List IConstructor -> List (IConstructor, IConstructor)
-generateCases [] = []
-generateCases [x] = [(x, x)]
+generateCases :: List IConstructor -> Maybe (List (IConstructor, IConstructor))
+generateCases [] = Just []
+generateCases [x] = Just [(x, x)]
 generateCases (x : y : xs) =
   let xfst = (x, x) : map ((,) x) (filter (\x' -> iConTy x' == iConTy x) (y : xs))
-      xfst' = if iConTy y == iConTy x then xfst ++ [(y, x)] else xfst
-   in xfst' ++ (if null xs then [(y, y)] else generateCases (y : xs))
+      xfst' = if tySame (iConTy y) (iConTy x) then xfst ++ [(y, x)] else xfst
+   in (xfst' ++) <$> (if null xs then Just [(y, y)] else generateCases (y : xs))
+
+tySame :: ITy -> ITy -> Bool
+tySame (ITyCustom a xs) (ITyCustom b ys) = a == b && all tmSame (zip xs ys)
+tySame (ITyTm t) (ITyTm u) = tmSame (t, u)
+tySame x y = x == y
+
+tmSame :: (ITm, ITm) -> Bool
+tmSame (ITmTy t1, ITmTy t2) = tySame t1 t2
+tmSame (ITmCon a xs, ITmCon b ys) = a == b && all tmSame (zip xs ys)
+tmSame (ITmList t xs, ITmList u ys) = tySame t u && all tmSame (zip xs ys)
+tmSame (x, y) = x == y

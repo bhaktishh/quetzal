@@ -1,11 +1,5 @@
-func test(Nat n) of Nat {
-    switch(n, n) {
-        case(0, 0) {
-            ;;
-        }
-        default {
-            n = 0;
-        }
-    }
-    return n;
+type Tree (Nat n, Ty a) {
+    constructor TEmpty of Tree(0, a);
+    constructor Leaf(a val) of Tree(1, a);
+    constructor Branch(Tree(m, a) left, Tree(n, a) right) of Tree(m + n, a);
 }
