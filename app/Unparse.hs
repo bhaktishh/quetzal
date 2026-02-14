@@ -303,7 +303,7 @@ uTm (ITmLam v tm) = do
   vs <- mapM uTm v
   tm <- uTm tm
   put (ind, t)
-  pure $ indent t ind ++ putParens ("\\" ++ (intercalate " " vs) ++ " => " ++ tm) -- todo check 
+  pure $ indent t ind ++ putParens ("\\" ++ (intercalate " " vs) ++ " => " ++ tm) -- todo check
 
 uFuncs :: IFunc -> Indent String
 uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do

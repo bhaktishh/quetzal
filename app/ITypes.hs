@@ -12,7 +12,7 @@ data ITy
   | ITyCustom String (List ITm)
   | ITyList ITy
   | ITyPair (ITy, ITy)
-  | ITyIO ITy 
+  | ITyIO ITy
   | ITyTm ITm
   | ITyVar String
   | ITyHole
@@ -21,7 +21,7 @@ data ITy
 data ITm
   = ITmNat Nat
   | ITmDot Eff ITm
-  | ITmWildCard 
+  | ITmWildCard
   | ITmPlus ITm ITm
   | ITmMinus ITm ITm
   | ITmMult ITm ITm
@@ -30,9 +30,9 @@ data ITm
   | ITmBEq ITm ITm
   | ITmBLT ITm ITm
   | ITmBAnd ITm ITm
-  | ITmBOr ITm ITm 
+  | ITmBOr ITm ITm
   | ITmBool Bool
-  | ITmPair ITm ITm 
+  | ITmPair ITm ITm
   | ITmUnit
   | ITmNot ITm
   | ITmList ITy (List ITm)
@@ -46,7 +46,7 @@ data ITm
   | ITmMatchImpossible (List ITm) (List ITm)
   | ITmLet String (Maybe ITy) ITm ITm
   | ITmLam (List ITm) ITm
-  | ITmBind ITm ITm -- ITmBind a b = a >>= b 
+  | ITmBind ITm ITm -- ITmBind a b = a >>= b
   deriving (Show, Eq)
 
 data Eff = IO | Other deriving (Show, Eq)
@@ -96,7 +96,7 @@ data IFunc = IFunc
   deriving (Show, Eq)
 
 data IImplementation = Impl
-  { iImplicits :: List IAnnParam, 
+  { iImplicits :: List IAnnParam,
     iConstraints :: List ITm,
     iSubject :: ITm,
     iBody :: IImplBody
@@ -115,9 +115,9 @@ data IImplCase = IImplCase
 
 data IImplCaseBody = Tm ITm | Nest (List IImplCase) deriving (Show, Eq)
 
-data IFSM = IFSM 
-  { idxm :: ITyDecl, 
-    conc :: IAnnParam, 
-    funcs :: List IFunc, 
-    run :: IFunc 
+data IFSM = IFSM
+  { idxm :: ITyDecl,
+    conc :: IAnnParam,
+    funcs :: List IFunc,
+    run :: IFunc
   }

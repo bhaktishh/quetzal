@@ -5,10 +5,10 @@
 
 module PToI where
 
+import Data.Char (toLower, toUpper)
 import Data.List (nub, unsnoc)
 import qualified Data.Map as M
 import Data.Tuple (swap)
-import Data.Char (toLower, toUpper)
 import ITypes
 import PTypes
 
@@ -58,16 +58,15 @@ trPBool x = x
 convIf :: ITm -> ITm -> ITm -> ITm
 convIf c t e = ITmMatch [trBool c] [([ITmCon "No" [ITmVar "noprf"]], e), ([ITmCon "Yes" [ITmVar "yesprf"]], t)]
 
--- takes a function body : Stmt and function itself : Func 
+-- takes a function body : Stmt and function itself : Func
 -- converts into a IFunc body and where clause
 trBody :: Stmt -> Func -> (ITm, List ITm)
-trBody x f = let 
-              argMap = mapFromFuncArgs (funcArgs f) M.empty
-              args = map (\(AnnParam (ty, str) _) -> (str, ty)) (funcArgs f)
-             in  
-              case x of
-                StBlock ls -> trListStmt ls argMap args f []
-                _ -> trListStmt [x] argMap args f []
+trBody x f =
+  let argMap = mapFromFuncArgs (funcArgs f) M.empty
+      args = map (\(AnnParam (ty, str) _) -> (str, ty)) (funcArgs f)
+   in case x of
+        StBlock ls -> trListStmt ls argMap args f []
+        _ -> trListStmt [x] argMap args f []
 
 mapFromFuncArgs :: List AnnParam -> M.Map String PTy -> M.Map String PTy
 mapFromFuncArgs [] m = m
@@ -76,8 +75,8 @@ mapFromFuncArgs ((AnnParam (ty, var) _) : xs) m = mapFromFuncArgs xs (M.insert v
 mapToAnnParam :: M.Map String PTy -> List AnnParam
 mapToAnnParam m = map (\(v, ty) -> AnnParam (ty, v) True) (M.toList m)
 
---            stmt list   argmap              arglist               og func  where block  (func, where block) 
-trListStmt :: List Stmt -> M.Map String PTy -> List (String, PTy) -> Func  -> List ITm   -> (ITm, List ITm)
+--            stmt list   argmap              arglist               og func  where block  (func, where block)
+trListStmt :: List Stmt -> M.Map String PTy -> List (String, PTy) -> Func -> List ITm -> (ITm, List ITm)
 trListStmt [StSkip] _ _ _ _ = error "cannot end with skip i think"
 trListStmt (StSkip : xs) m ls f i = trListStmt xs m ls f i
 trListStmt [] _ _ _ i = (ITmUnit, i)
@@ -230,154 +229,143 @@ trConstructor
         iConTy = trTy conTy
       }
 
-mkICon :: String -> String 
+mkICon :: String -> String
 mkICon [] = error "empty constructor"
-mkICon (x : xs) = toUpper x : xs 
+mkICon (x : xs) = toUpper x : xs
 
-mkIFun :: String -> String 
+mkIFun :: String -> String
 mkIFun [] = error "empty constructor"
-mkIFun (x : xs) = toLower x : xs 
+mkIFun (x : xs) = toLower x : xs
 
-
--- given name of idxm and action 
+-- given name of idxm and action
 trAction :: String -> Action -> (IConstructor, IFunc)
-trAction name (Action {actionName, actionRetTy=(AnnParam (rty, rvar) _), actionStTrans, actionFunc}) = 
-  (
-    IConstructor {
-      iConName = mkICon actionName, 
-      iConArgs = [], 
-      iConTy = ITyCustom name [ITmTy (trTy rty), trTm (fst actionStTrans), ITmLam [ITmVar rvar] (trTm (snd actionStTrans))]
-    },
-    trFunc actionFunc 
+trAction name (Action {actionName, actionRetTy = (AnnParam (rty, rvar) _), actionStTrans, actionFunc}) =
+  ( IConstructor
+      { iConName = mkICon actionName,
+        iConArgs = [],
+        iConTy = ITyCustom name [ITmTy (trTy rty), trTm (fst actionStTrans), ITmLam [ITmVar rvar] (trTm (snd actionStTrans))]
+      },
+    trFunc actionFunc
   )
 
 noAnnIParam :: ITy -> IAnnParam
-noAnnIParam ty = IAnnParam ("", ty) True 
+noAnnIParam ty = IAnnParam ("", ty) True
 
-mkITyArg :: ITyDecl -> IAnnParam 
+mkITyArg :: ITyDecl -> IAnnParam
 mkITyArg ITyDecl {iTyDeclName, iTyDeclParams, iTyDeclConstructors} = noAnnIParam (ITyCustom iTyDeclName (map (ITmVar . getIAnnParamVar) iTyDeclParams))
-
 
 -- run resource (action >>= cont) = run resource action >>= (\res, resource => run resource (cont res))
 mkRunBind :: String -> String -> (ITm, ITm)
-mkRunBind funcName str = let 
-                          action = ITmVar "action"
-                          cont = ITmVar "cont"
-                          res = ITmVar "res"
-                          run = ITmVar funcName
-                          resource = ITmVar str
-                        in 
-                          (ITmFuncCall run [resource, ITmBind action cont], ITmBind (ITmFuncCall run [resource, action]) (ITmLam [res, resource] (ITmFuncCall run [resource, ITmFuncCall cont [res]])))
-  
+mkRunBind funcName str =
+  let action = ITmVar "action"
+      cont = ITmVar "cont"
+      res = ITmVar "res"
+      run = ITmVar funcName
+      resource = ITmVar str
+   in (ITmFuncCall run [resource, ITmBind action cont], ITmBind (ITmFuncCall run [resource, action]) (ITmLam [res, resource] (ITmFuncCall run [resource, ITmFuncCall cont [res]])))
+
 -- run resource (pure x) = pure (x, resource)
 mkRunPure :: String -> String -> (ITm, ITm)
-mkRunPure funcName str = let
-                          x = ITmVar "x"
-                          vPure = ITmVar "Pure"
-                          fPure = ITmVar "pure"
-                          resource = ITmVar str
-                          run = ITmVar funcName
-                        in 
-                          (ITmFuncCall run [resource, ITmFuncCall vPure [x]], ITmFuncCall fPure [ITmPair x resource])
+mkRunPure funcName str =
+  let x = ITmVar "x"
+      vPure = ITmVar "Pure"
+      fPure = ITmVar "pure"
+      resource = ITmVar str
+      run = ITmVar funcName
+   in (ITmFuncCall run [resource, ITmFuncCall vPure [x]], ITmFuncCall fPure [ITmPair x resource])
 
--- run resource (Lift io) = (,) <$> io <*> pure resource      
+-- run resource (Lift io) = (,) <$> io <*> pure resource
 -- run resource (Lift io) = (<*>) ((<$>) (,) io)) (pure resource)
 mkRunLift :: String -> String -> (ITm, ITm)
-mkRunLift funcName str = let 
-                          resource = ITmVar str
-                          run = ITmVar funcName 
-                          pair = ITmVar "(,)"
-                          fmap = ITmVar "(<$>)"
-                          ap = ITmVar "(<*>)"
-                          fPure = ITmVar "pure"
-                          lift = ITmVar "Lift"
-                          io = ITmVar "io"
-                        in 
-                          (ITmFuncCall run [resource, ITmFuncCall lift [io]], ITmFuncCall ap [ITmFuncCall fmap [pair, io], ITmFuncCall fPure [resource]])
+mkRunLift funcName str =
+  let resource = ITmVar str
+      run = ITmVar funcName
+      pair = ITmVar "(,)"
+      fmap = ITmVar "(<$>)"
+      ap = ITmVar "(<*>)"
+      fPure = ITmVar "pure"
+      lift = ITmVar "Lift"
+      io = ITmVar "io"
+   in (ITmFuncCall run [resource, ITmFuncCall lift [io]], ITmFuncCall ap [ITmFuncCall fmap [pair, io], ITmFuncCall fPure [resource]])
 
 -- Pure : (x : ty) -> Resource ty (st x) st
 mkConPure :: String -> IConstructor
-mkConPure resTy = let 
-                      st = ITmVar "st"
-                      x = ITmVar "x"
-                      ty = ITmVar "ty" 
-                    in 
-                      IConstructor {
-                        iConName = "Pure", 
-                        iConArgs = [IAnnParam ("x", ITyTm ty) True], 
-                        iConTy = ITyCustom resTy [ty, (ITmFuncCall st [x]), st]
-                      }
+mkConPure resTy =
+  let st = ITmVar "st"
+      x = ITmVar "x"
+      ty = ITmVar "ty"
+   in IConstructor
+        { iConName = "Pure",
+          iConArgs = [IAnnParam ("x", ITyTm ty) True],
+          iConTy = ITyCustom resTy [ty, (ITmFuncCall st [x]), st]
+        }
 
 --   Lift : IO ty -> Resource ty st (const st)
 mkConLift :: String -> IConstructor
-mkConLift resTy = let 
-                    st = ITmVar "st"
-                    ty = ITmVar "ty"
-                    fConst = ITmVar "const"
-                  in
-                    IConstructor {
-                      iConName = "Lift", 
-                      iConArgs = [noAnnIParam (ITyIO (ITyTm ty))], 
-                      iConTy = ITyCustom resTy [ty, st, (ITmFuncCall fConst [st])]
-                    }
+mkConLift resTy =
+  let st = ITmVar "st"
+      ty = ITmVar "ty"
+      fConst = ITmVar "const"
+   in IConstructor
+        { iConName = "Lift",
+          iConArgs = [noAnnIParam (ITyIO (ITyTm ty))],
+          iConTy = ITyCustom resTy [ty, st, (ITmFuncCall fConst [st])]
+        }
 
 -- (>>=) : Resource a st1 st2 -> ((x : a) -> Resource b (st2 x) st3) -> Resource b st1 st3
-mkConBind :: String -> IConstructor 
-mkConBind resTy = let 
-                    st1 = ITmVar "st1"
-                    st2 = ITmVar "st2"
-                    st3 = ITmVar "st3"
-                    a = ITmVar "a"
-                    b = ITmVar "b"
-                  in 
-                    IConstructor {
-                      iConName = "(>>=)", 
-                      iConArgs = [noAnnIParam (ITyCustom resTy [a, st1, st2]), noAnnIParam (ITyFunc [(Just "x", ITyTm a), (Nothing, ITyCustom resTy [b, (ITmFuncCall st2 [ITmVar "x"])])])], 
-                      iConTy = ITyCustom resTy [b, st1, st3]
-                    }
+mkConBind :: String -> IConstructor
+mkConBind resTy =
+  let st1 = ITmVar "st1"
+      st2 = ITmVar "st2"
+      st3 = ITmVar "st3"
+      a = ITmVar "a"
+      b = ITmVar "b"
+   in IConstructor
+        { iConName = "(>>=)",
+          iConArgs = [noAnnIParam (ITyCustom resTy [a, st1, st2]), noAnnIParam (ITyFunc [(Just "x", ITyTm a), (Nothing, ITyCustom resTy [b, (ITmFuncCall st2 [ITmVar "x"])])])],
+          iConTy = ITyCustom resTy [b, st1, st3]
+        }
 
 -- run resource Action = action resource
 mkRunAction :: String -> String -> String -> (ITm, ITm)
-mkRunAction fName strRes strAction = let 
-                                      resource = ITmVar strRes
-                                      action = ITmVar (mkIFun strAction)
-                                      actionCon = ITmCon strAction []
-                                    in
-                                      (ITmFuncCall (ITmVar fName) [resource, actionCon], ITmFuncCall action [resource])
+mkRunAction fName strRes strAction =
+  let resource = ITmVar strRes
+      action = ITmVar (mkIFun strAction)
+      actionCon = ITmCon strAction []
+   in (ITmFuncCall (ITmVar fName) [resource, actionCon], ITmFuncCall action [resource])
 
 mkRun :: IAnnParam -> ITyDecl -> IFunc
-mkRun concTy decl = let 
-                      resTy = iTyDeclName decl
-                      iFuncName = "run" ++ resTy
-                      mcons = map (\f -> f iFuncName resTy) [mkRunPure, mkRunBind, mkRunLift]
-                      cons = map (mkRunAction iFuncName resTy) (map iConName (iTyDeclConstructors decl))
-                      iFuncBody = mcons ++ cons
-                    in 
-                      IFunc {
-                        iFuncName,
-                        iFuncArgs = [noAnnIParam (getIAnnParamTy concTy), mkITyArg decl],
-                        iFuncBody,
-                        iFuncRetTy = ITyIO $ ITyPair (ITyVar "ty", getIAnnParamTy concTy),
-                        iWhere = []
-}
+mkRun concTy decl =
+  let resTy = iTyDeclName decl
+      iFuncName = "run" ++ resTy
+      mcons = map (\f -> f iFuncName resTy) [mkRunPure, mkRunBind, mkRunLift]
+      cons = map (mkRunAction iFuncName resTy) (map iConName (iTyDeclConstructors decl))
+      iFuncBody = mcons ++ cons
+   in IFunc
+        { iFuncName,
+          iFuncArgs = [noAnnIParam (getIAnnParamTy concTy), mkITyArg decl],
+          iFuncBody,
+          iFuncRetTy = ITyIO $ ITyPair (ITyVar "ty", getIAnnParamTy concTy),
+          iWhere = []
+        }
 
-trFSM :: FSM -> IFSM 
-trFSM FSM {resource, stateTy, initCons, actions} = 
-  let idxmName = "idxm" -- todo ++ read resourcety   
+trFSM :: FSM -> IFSM
+trFSM FSM {resource, stateTy, initCons, actions} =
+  let idxmName = "idxm" -- todo ++ read resourcety
       confuncs = map (trAction idxmName) actions
-      idxm = ITyDecl {
-        iTyDeclName = idxmName,
-        iTyDeclParams = [IAnnParam ("ty", ITyTy) True],
-        iTyDeclConstructors = map fst confuncs ++ map (\f -> f idxmName) [mkConPure, mkConBind, mkConLift]
-      }
-      conc = trAnnParam resource 
-  in 
-  IFSM {
-  idxm,
-  conc,
-  funcs = map (trFunc . actionFunc) actions, 
-  run = mkRun conc idxm
-} 
+      idxm =
+        ITyDecl
+          { iTyDeclName = idxmName,
+            iTyDeclParams = [IAnnParam ("ty", ITyTy) True],
+            iTyDeclConstructors = map fst confuncs ++ map (\f -> f idxmName) [mkConPure, mkConBind, mkConLift]
+          }
+      conc = trAnnParam resource
+   in IFSM
+        { idxm,
+          conc,
+          funcs = map (trFunc . actionFunc) actions,
+          run = mkRun conc idxm
+        }
 
 trAnnParam :: AnnParam -> IAnnParam
 trAnnParam (AnnParam (ty, str) vis) = IAnnParam (str, trTy ty) vis
@@ -397,7 +385,7 @@ nubAnnParam m (x@(AnnParam (ty, v) vis) : xs) lnew = case M.lookup v m of
 getIAnnParamVar :: IAnnParam -> String
 getIAnnParamVar (IAnnParam (str, _) _) = str
 
-getIAnnParamTy :: IAnnParam -> ITy 
+getIAnnParamTy :: IAnnParam -> ITy
 getIAnnParamTy (IAnnParam (_, ty) _) = ty
 
 dontDoTheseTypes :: [ITy]
@@ -547,6 +535,6 @@ tmSame :: (ITm, ITm) -> Bool
 tmSame (ITmTy t1, ITmTy t2) = tySame t1 t2
 tmSame (ITmCon a xs, ITmCon b ys) = a == b && all tmSame (zip xs ys)
 tmSame (ITmList t xs, ITmList u ys) = tySame t u && all tmSame (zip xs ys)
-tmSame (ITmVar _, _) = True 
-tmSame (_, ITmVar _) = True 
+tmSame (ITmVar _, _) = True
+tmSame (_, ITmVar _) = True
 tmSame (x, y) = x == y

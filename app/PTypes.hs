@@ -4,7 +4,7 @@ import GHC.TypeLits (Nat)
 
 type List a = [a]
 
-data ProgEl = PDecl Decl | PFunc Func | PImport String 
+data ProgEl = PDecl Decl | PFunc Func | PImport String
   deriving (Show, Eq)
 
 type Prog = List ProgEl
@@ -24,15 +24,15 @@ data PTy
       }
   | PTyList PTy
   | PTyPTm PTm
-  | PTyHole 
+  | PTyHole
   deriving (Show, Eq)
 
 data PTm
   = PTmNat Nat
   | PTmPlus PTm PTm
   | PTmMinus PTm PTm
-  | PTmMult PTm PTm 
-  | PTmDiv PTm PTm 
+  | PTmMult PTm PTm
+  | PTmDiv PTm PTm
   | PTmMod PTm PTm
   | PTmBEq PTm PTm
   | PTmBLT PTm PTm
@@ -75,11 +75,11 @@ data Stmt
       { condition :: PTm,
         body :: Stmt
       }
-  | StReturn PTm 
-  | StIf PTm Stmt Stmt 
-  | StEIf PTm Stmt Stmt 
+  | StReturn PTm
+  | StIf PTm Stmt Stmt
+  | StEIf PTm Stmt Stmt
   | StBlock (List Stmt)
-  | StSwitch Switch 
+  | StSwitch Switch
   | StSkip
   deriving (Show, Eq)
 
@@ -117,16 +117,16 @@ data Constructor = Constructor
 
 data AnnParam = AnnParam (PTy, String) Bool deriving (Show, Eq) -- explicit = true or false. default true
 
-data Action = Action 
-  { actionName :: String, 
-    actionRetTy :: AnnParam, 
-    actionStTrans :: (PTm, PTm), 
+data Action = Action
+  { actionName :: String,
+    actionRetTy :: AnnParam,
+    actionStTrans :: (PTm, PTm),
     actionFunc :: Func
   }
 
-data FSM = FSM 
-  { resource :: AnnParam, 
-    stateTy :: String, 
-    initCons :: List Func, 
+data FSM = FSM
+  { resource :: AnnParam,
+    stateTy :: String,
+    initCons :: List Func,
     actions :: List Action
   }
