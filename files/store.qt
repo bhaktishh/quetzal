@@ -1,0 +1,53 @@
+
+type Access {
+    constructor LoggedOut;
+    constructor LoggedIn;
+}
+
+type LoginResult {
+    constructor Ok;
+    constructor BadPassword;
+}
+
+type Session(Access a) {
+    constructor MkSession(Access a) of Session(a);
+}
+
+func mkSession() of Session(LoggedOut) {
+    return MkSession(LoggedOut);
+}
+
+func authCreds(String creds) of LoginResult {
+    if(creds == "1234") {
+        return Ok; 
+    } else {
+        return BadPassword;
+    }
+}
+
+func login(Session(LoggedOut) s, String creds) of (LoginResult res, res == Ok ? Session(LoggedIn) : Session(LoggedOut)) {
+    LoginResult res = authCreds(creds);
+    return (res, res == Ok ? MkSession(LoggedIn) : s); 
+}
+
+func readSecret(Session(LoggedIn) s) of (String, Session(LoggedIn)) {
+    return ("shrimps is bugs", s);
+}
+
+func logout(Session(LoggedIn)) of ((), Session(LoggedOut)) {
+    return mkSession(); 
+}
+
+func getData() {
+    Session(LoggedOut) s = mkSession(); 
+    LoginResult res; 
+    String secret;
+    (res, s) = s.login("1234"); 
+    eif (res == Ok) {
+        (secret, s) = s.readSecret(); 
+        print(secret);
+        s = s.logout(); 
+    } else {
+        print("error");
+    }
+}

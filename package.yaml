@@ -40,6 +40,9 @@ ghc-options:
 
 library:
   source-dirs: src
+  default-extensions:
+    - NamedFieldPuns
+
 
 executables:
   quetzal-exe:

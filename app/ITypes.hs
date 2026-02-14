@@ -11,12 +11,16 @@ data ITy
   | ITyFunc (List (Maybe String, ITy))
   | ITyCustom String (List ITm)
   | ITyList ITy
+  | ITyPair (ITy, ITy)
+  | ITyIO ITy 
   | ITyTm ITm
+  | ITyVar String
   | ITyHole
   deriving (Show, Eq)
 
 data ITm
   = ITmNat Nat
+  | ITmDot Eff ITm
   | ITmWildCard 
   | ITmPlus ITm ITm
   | ITmMinus ITm ITm
@@ -28,6 +32,7 @@ data ITm
   | ITmBAnd ITm ITm
   | ITmBOr ITm ITm 
   | ITmBool Bool
+  | ITmPair ITm ITm 
   | ITmUnit
   | ITmNot ITm
   | ITmList ITy (List ITm)
@@ -40,8 +45,11 @@ data ITm
   | ITmMatch (List ITm) (List (List ITm, ITm))
   | ITmMatchImpossible (List ITm) (List ITm)
   | ITmLet String (Maybe ITy) ITm ITm
-  | ITmLam String ITm
+  | ITmLam (List ITm) ITm
+  | ITmBind ITm ITm -- ITmBind a b = a >>= b 
   deriving (Show, Eq)
+
+data Eff = IO | Other deriving (Show, Eq)
 
 data IConstructor = IConstructor
   { iConName :: String,
@@ -52,6 +60,8 @@ data IConstructor = IConstructor
 
 data IAnnParam = IAnnParam (String, ITy) Bool -- explicit = true or false. default true
   deriving (Show, Eq)
+
+data IParam = IParam ITy Bool
 
 data IRecDecl = IRecDecl
   { iRecDeclName :: String,
@@ -79,7 +89,7 @@ data IProgEl = IIDecl IDecl | IIFunc IFunc | IIImport String
 data IFunc = IFunc
   { iFuncName :: String,
     iFuncArgs :: List IAnnParam,
-    iFuncBody :: ITm,
+    iFuncBody :: List (ITm, ITm),
     iFuncRetTy :: ITy,
     iWhere :: List ITm
   }
@@ -104,3 +114,10 @@ data IImplCase = IImplCase
   deriving (Show, Eq)
 
 data IImplCaseBody = Tm ITm | Nest (List IImplCase) deriving (Show, Eq)
+
+data IFSM = IFSM 
+  { idxm :: ITyDecl, 
+    conc :: IAnnParam, 
+    funcs :: List IFunc, 
+    run :: IFunc 
+  }

@@ -116,3 +116,17 @@ data Constructor = Constructor
   deriving (Show, Eq)
 
 data AnnParam = AnnParam (PTy, String) Bool deriving (Show, Eq) -- explicit = true or false. default true
+
+data Action = Action 
+  { actionName :: String, 
+    actionRetTy :: AnnParam, 
+    actionStTrans :: (PTm, PTm), 
+    actionFunc :: Func
+  }
+
+data FSM = FSM 
+  { resource :: AnnParam, 
+    stateTy :: String, 
+    initCons :: List Func, 
+    actions :: List Action
+  }

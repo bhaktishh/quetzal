@@ -300,9 +300,10 @@ uTm (ITmList t l) = undefined
 uTm (ITmLam v tm) = do
   (ind, t) <- get
   put (ind, False)
+  vs <- mapM uTm v
   tm <- uTm tm
   put (ind, t)
-  pure $ indent t ind ++ putParens ("\\" ++ v ++ " => " ++ tm)
+  pure $ indent t ind ++ putParens ("\\" ++ (intercalate " " vs) ++ " => " ++ tm) -- todo check 
 
 uFuncs :: IFunc -> Indent String
 uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
@@ -311,7 +312,7 @@ uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
   retty <- uTy iFuncRetTy
   args <- mapM (uAnnParam True) iFuncArgs
   put (ind + 1, True)
-  body <- uTm iFuncBody
+  bodies <- mapM (\(l, body) -> (,) <$> uTm l <*> uTm body) iFuncBody
   put (ind, False)
   deps <-
     mapM
@@ -330,11 +331,12 @@ uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
       ++ retty
       ++ "\n"
       ++ indent t ind
-      ++ iFuncName
-      ++ " "
-      ++ unwords (map (\(IAnnParam (v, _) _) -> v) (filter (\(IAnnParam (_, _) vis) -> vis) iFuncArgs))
-      ++ " = \n"
-      ++ body
+      ++ intercalate "\n" (map (\(l, body) -> l ++ " = " ++ body) bodies)
+      -- ++ iFuncName
+      -- ++ " "
+      -- ++ unwords (map (\(IAnnParam (v, _) _) -> v) (filter (\(IAnnParam (_, _) vis) -> vis) iFuncArgs))
+      -- ++ " = \n"
+      -- ++ body
       ++ if null deps
         then ""
         else

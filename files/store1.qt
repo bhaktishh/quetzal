@@ -1,0 +1,65 @@
+type Access {
+    constructor LoggedIn; 
+    constructor LoggedOut; 
+}
+
+type LoginResult {
+    constructor OK;
+    constructor BadPassword;
+}
+
+record Store {
+    String secret;
+    String pub; 
+}
+
+interface FSM a' b {
+    resource : a
+    resourceConc : a'
+    state : b
+    idxm : ty -> a -> b -> (ty -> b) -> ty
+    action : [(idxm ty a b (ty -> b), (a' -> IO (ty, a')))]
+    init : [(c -> a')]
+...
+}
+
+impl FSM(Store) {
+    resource = Store st;
+    stateTy = Access;
+
+    @init -- should always return :resource 
+    func initStore(String secret, String pub) returns Store {
+        return Store(secret, pub);
+    }
+
+    @action login returns LoginResult r [LoggedOut --> r == OK? LoggedIn : LoggedOut];
+    [IO] func login() returns LoginResult {
+        IO.print("enter password");
+        String pw = IO.getLine();
+        if (pw == "password123") {
+            return OK;
+        } else {
+            return BadPassword;
+        }
+    }
+    action Logout [LoggedIn --> LoggedOut];
+    [IO] func logout() {
+        IO.print("logging out");
+    }
+    action ReadSecret returns String [LoggedIn];
+    [IO] func readSecret() returns String {
+        return st.secret;
+    }
+}
+
+[IO] func main() {
+    Store st = initStore("secret", "pub"); 
+    LoginResult res = st.login(); 
+    if (res == OK) {
+        String secret = st.readSecret(); 
+        IO.print(secret);
+        st.logout();
+    } else {
+        IO.print("bad password");
+    }
+}

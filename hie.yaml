@@ -1,0 +1,25 @@
+cradle:
+  stack:
+    - path: "./src"
+      component: "quetzal:lib"
+
+    - path: "./app/Main.hs"
+      component: "quetzal:exe:quetzal-exe"
+
+    - path: "./app/ITypes.hs"
+      component: "quetzal:exe:quetzal-exe"
+
+    - path: "./app/Parse.hs"
+      component: "quetzal:exe:quetzal-exe"
+
+    - path: "./app/PToI.hs"
+      component: "quetzal:exe:quetzal-exe"
+
+    - path: "./app/PTypes.hs"
+      component: "quetzal:exe:quetzal-exe"
+
+    - path: "./app/Unparse.hs"
+      component: "quetzal:exe:quetzal-exe"
+
+    - path: "./test"
+      component: "quetzal:test:quetzal-test"
