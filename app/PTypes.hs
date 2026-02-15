@@ -4,7 +4,7 @@ import GHC.TypeLits (Nat)
 
 type List a = [a]
 
-data ProgEl = PDecl Decl | PFunc Func | PImport String
+data ProgEl = PDecl Decl | PFunc Func | PImport String | PFSM FSM
   deriving (Show, Eq)
 
 type Prog = List ProgEl
@@ -29,6 +29,7 @@ data PTy
 
 data PTm
   = PTmNat Nat
+  | PTmDot PTm PTm
   | PTmPlus PTm PTm
   | PTmMinus PTm PTm
   | PTmMult PTm PTm
@@ -45,6 +46,7 @@ data PTm
   | PTmPTy PTy
   | PTmVar String
   | PTmWildCard
+  | PTmTernary PTm PTm PTm
   | PTmCon String (List PTm)
   | PTmFunc Func
   | PTmFuncCall PTm (List PTm)
@@ -83,11 +85,14 @@ data Stmt
   | StSkip
   deriving (Show, Eq)
 
+data Eff = IO | Other deriving (Show, Eq)
+
 data Func = Func
   { funcName :: String,
     funcRetTy :: PTy,
     funcArgs :: List AnnParam,
-    funcBody :: Stmt
+    funcBody :: Stmt,
+    funcEff :: Maybe Eff
   }
   deriving (Show, Eq)
 
@@ -123,6 +128,7 @@ data Action = Action
     actionStTrans :: (PTm, PTm),
     actionFunc :: Func
   }
+  deriving (Show, Eq)
 
 data FSM = FSM
   { resource :: AnnParam,
@@ -130,3 +136,4 @@ data FSM = FSM
     initCons :: List Func,
     actions :: List Action
   }
+  deriving (Show, Eq)

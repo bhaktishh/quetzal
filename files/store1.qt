@@ -23,16 +23,15 @@ interface FSM a' b {
 ...
 }
 
-impl FSM(Store) {
+impl FSM {
     resource = Store st;
     stateTy = Access;
 
-    @init -- should always return :resource 
     func initStore(String secret, String pub) returns Store {
         return Store(secret, pub);
     }
 
-    @action login returns LoginResult r [LoggedOut --> r == OK? LoggedIn : LoggedOut];
+    action login returns LoginResult r [LoggedOut --> r == OK? LoggedIn : LoggedOut];
     [IO] func login() returns LoginResult {
         IO.print("enter password");
         String pw = IO.getLine();
@@ -42,11 +41,12 @@ impl FSM(Store) {
             return BadPassword;
         }
     }
-    action Logout [LoggedIn --> LoggedOut];
+    action logout [LoggedIn --> LoggedOut];
     [IO] func logout() {
         IO.print("logging out");
     }
-    action ReadSecret returns String [LoggedIn];
+
+    action readSecret returns String [LoggedIn];
     [IO] func readSecret() returns String {
         return st.secret;
     }

@@ -1,0 +1,3 @@
+action login returns LoginResult r [LoggedOut --> (r == OK) ? LoggedIn : LoggedOut];
+[IO] func login() returns LoginResult {
+}

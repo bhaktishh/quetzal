@@ -35,7 +35,9 @@ reserved =
     "case",
     "Void",
     "switch",
-    "Ty"
+    "Ty",
+    "FSM",
+    "action"
   ]
 
 pSpaces :: Parser a -> Parser a
@@ -71,7 +73,7 @@ pTLDecl :: Parser Decl
 pTLDecl = (PTy <$> pTyDecl) <|> (Rec <$> pRecDecl)
 
 pProgEl :: Parser ProgEl
-pProgEl = pSpaces (pImport <|> (PDecl <$> pTLDecl) <|> (PFunc <$> pFunc))
+pProgEl = pSpaces (pImport <|> (PDecl <$> pTLDecl) <|> (PFunc <$> pFunc) <|> (PFSM <$> pFSM))
 
 pImport :: Parser ProgEl
 pImport = do
@@ -82,22 +84,73 @@ pImport = do
 pProg :: Parser Prog
 pProg = many (pSpaces pProgEl) <* eof
 
+pAction :: Parser Action
+pAction = do
+  _ <- pSpaces $ string "action"
+  actionName <- pSpaces pLowerStr
+  ret <- try (pSpaces (string "returns") >> pSpaces pPTy) <|> pure PTyUnit
+  retVar <- try (pSpaces pLowerStr) <|> pure ""
+  let actionRetTy = mkAnnParam True (ret, retVar)
+  _ <- pSpaces $ char '['
+  stIn <- pSpaces pPTm
+  stOut <- try (pSpaces (string "-->") >> pSpaces pPTm) <|> pure stIn
+  let actionStTrans = (stIn, stOut)
+  _ <- pSpaces $ char ']'
+  _ <- pSpaces $ char ';'
+  actionFunc <- pSpaces pFunc
+  pure $
+    Action
+      { actionName,
+        actionRetTy,
+        actionStTrans,
+        actionFunc
+      }
+
+pFSM :: Parser FSM
+pFSM = do
+  _ <- pSpaces $ string "impl"
+  _ <- pSpaces $ string "FSM"
+  _ <- pSpaces $ char '{'
+  (ty, var) <- pSpaces (string "resource") >> pSpaces (char '=') >> ((,) <$> pSpaces pPTy <*> pSpaces pVar)
+  let resource = mkAnnParam True (ty, var)
+  _ <- pSpaces $ char ';'
+  stateTy <- pSpaces (string "stateTy") >> pSpaces (char '=') >> pSpaces pUpperStr
+  _ <- pSpaces $ char ';'
+  initCons <- try $ many (pSpaces pFunc)
+  actions <- try $ many (pSpaces pAction)
+  _ <- pSpaces $ char '}'
+  pure $
+    FSM
+      { resource,
+        stateTy,
+        initCons,
+        actions
+      }
+
+pEff :: Parser Eff
+pEff = do
+  _ <- pSpaces $ char '['
+  eff <- try (pSpaces (string "IO") >> pure IO)
+  _ <- pSpaces $ char ']'
+  pure eff
+
 pFunc :: Parser Func
 pFunc = do
+  funcEff <- try (Just <$> pSpaces pEff) <|> pure Nothing
   _ <- pSpaces $ string "func"
   funcName <- pSpaces pLowerStr
   impArgs <- try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> try (pSpaces (pAngles pFuncArgs)) <|> pure []
   expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs)
   let funcArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
-  _ <- pSpaces $ string "of"
-  funcRetTy <- pSpaces pPTy
+  funcRetTy <- try (pSpaces (string "returns") >> pSpaces pPTy) <|> pure PTyUnit
   funcBody <- pSpaces $ pCurlies (try pStmt <|> pure (StBlock []))
   pure $
     Func
       { funcName,
         funcArgs,
         funcRetTy,
-        funcBody
+        funcBody,
+        funcEff
       }
 
 mkAnnParam :: Bool -> (PTy, String) -> AnnParam
@@ -396,6 +449,15 @@ pIf = do
   e <- pSpaces $ pCurlies pPTm
   pure $ PTmIf cond t e
 
+pTernary :: Parser PTm
+pTernary = do
+  t1 <- pSpaces pPTm0
+  _ <- pSpaces $ char '?'
+  t2 <- pSpaces pPTm0
+  _ <- pSpaces $ char ':'
+  t3 <- pSpaces pPTm0
+  pure $ PTmTernary t1 t2 t3
+
 pStSwitch :: Parser Stmt
 pStSwitch = do
   _ <- pSpaces $ string "switch"
@@ -465,6 +527,13 @@ pPTyFunc = do
         tyFuncRetTy
       }
 
+pPTmDot :: Parser PTm
+pPTmDot = do
+  t1 <- pSpaces pPTm0
+  _ <- char '.'
+  t2 <- pSpaces pPTm0
+  pure $ PTmDot t1 t2
+
 pTyHole :: Parser PTy
 pTyHole = pSpaces (char '?') >> pure PTyHole
 
@@ -494,6 +563,8 @@ pPTm1 =
     <|> try pFuncCall
     <|> try pPTmCon
     <|> try pIf
+    <|> try pTernary
+    <|> try pPTmDot
     <|> try pPTm0
 
 pPTm0 :: Parser PTm

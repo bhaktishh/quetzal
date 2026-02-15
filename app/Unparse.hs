@@ -122,6 +122,17 @@ uTy (ITyFunc args) = do
 uTy (ITyTm t) = uTm t
 uTy (ITyList t) = (++) "List " <$> uTy t
 uTy ITyHole = pure $ "?"
+uTy (ITyPair (t1, t2)) = do
+  (ind, t) <- get
+  put (ind, False)
+  t1' <- uTy t1
+  t2' <- uTy t2
+  pure $ indent t ind ++ "(" ++ t1' ++ "," ++ t2' ++ ")"
+uTy (ITyIO ty) = do
+  (ind, t) <- get
+  put (ind, False)
+  ty' <- uTy ty
+  pure $ indent t ind ++ "IO " ++ ty'
 
 uFuncArg :: (Maybe String, ITy) -> Indent String
 uFuncArg (Nothing, ty) = uTy ty
@@ -304,6 +315,18 @@ uTm (ITmLam v tm) = do
   tm <- uTm tm
   put (ind, t)
   pure $ indent t ind ++ putParens ("\\" ++ (intercalate " " vs) ++ " => " ++ tm) -- todo check
+uTm (ITmPair t1 t2) = do
+  (ind, t) <- get
+  put (ind, False)
+  t1' <- uTm t1
+  t2' <- uTm t2
+  pure $ indent t ind ++ putParens (t1' ++ "," ++ t2')
+uTm (ITmBind t1 t2) = do
+  (ind, t) <- get
+  put (ind, False)
+  t1' <- uTm t1
+  t2' <- uTm t2
+  pure $ indent t ind ++ putParens t1' ++ " >>= " ++ putParens t2'
 
 uFuncs :: IFunc -> Indent String
 uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do

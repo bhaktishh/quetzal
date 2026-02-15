@@ -14,13 +14,11 @@ data ITy
   | ITyPair (ITy, ITy)
   | ITyIO ITy
   | ITyTm ITm
-  | ITyVar String
   | ITyHole
   deriving (Show, Eq)
 
 data ITm
   = ITmNat Nat
-  | ITmDot Eff ITm
   | ITmWildCard
   | ITmPlus ITm ITm
   | ITmMinus ITm ITm
@@ -48,8 +46,6 @@ data ITm
   | ITmLam (List ITm) ITm
   | ITmBind ITm ITm -- ITmBind a b = a >>= b
   deriving (Show, Eq)
-
-data Eff = IO | Other deriving (Show, Eq)
 
 data IConstructor = IConstructor
   { iConName :: String,

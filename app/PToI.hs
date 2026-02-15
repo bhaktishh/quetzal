@@ -2,6 +2,7 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {-# HLINT ignore "Use if" #-}
+{- HLINT ignore "Redundant bracket" -}
 
 module PToI where
 
@@ -11,6 +12,10 @@ import qualified Data.Map as M
 import Data.Tuple (swap)
 import ITypes
 import PTypes
+
+-- ---------------------------------
+-- surface level transformations
+-- ---------------------------------
 
 trTm :: PTm -> ITm
 trTm (PTmNat n) = ITmNat n
@@ -38,6 +43,9 @@ trTm (PTmBOr t1 t2) = ITmBOr (trTm t1) (trTm t2)
 trTm (PTmBLT t1 t2) = ITmBLT (trTm t1) (trTm t2)
 trTm (PTmList t1 xs) = ITmList (trTy t1) (map trTm xs)
 trTm (PTmFunc f) = ITmFunc (trFunc f)
+trTm (PTmDot t1 (PTmFuncCall f args)) = ITmFuncCall (trTm f) (trTm t1 : map trTm args)
+trTm (PTmDot t1 t2) = ITmFuncCall (trTm t2) [trTm t1]
+trTm (PTmTernary t1 t2 t3) = ITmIf (trTm t1) (trTm t2) (trTm t3)
 
 trBool :: ITm -> ITm
 trBool (ITmBLT t1 t2) = ITmFuncCall (ITmVar "isLT") [t1, t2]
@@ -55,26 +63,6 @@ trPBool (PTmBOr t1 t2) = PTmBOr (trPBool t1) (trPBool t2)
 trPBool (PTmNot t) = PTmNot (trPBool t)
 trPBool x = x
 
-convIf :: ITm -> ITm -> ITm -> ITm
-convIf c t e = ITmMatch [trBool c] [([ITmCon "No" [ITmVar "noprf"]], e), ([ITmCon "Yes" [ITmVar "yesprf"]], t)]
-
--- takes a function body : Stmt and function itself : Func
--- converts into a IFunc body and where clause
-trBody :: Stmt -> Func -> (ITm, List ITm)
-trBody x f =
-  let argMap = mapFromFuncArgs (funcArgs f) M.empty
-      args = map (\(AnnParam (ty, str) _) -> (str, ty)) (funcArgs f)
-   in case x of
-        StBlock ls -> trListStmt ls argMap args f []
-        _ -> trListStmt [x] argMap args f []
-
-mapFromFuncArgs :: List AnnParam -> M.Map String PTy -> M.Map String PTy
-mapFromFuncArgs [] m = m
-mapFromFuncArgs ((AnnParam (ty, var) _) : xs) m = mapFromFuncArgs xs (M.insert var ty m)
-
-mapToAnnParam :: M.Map String PTy -> List AnnParam
-mapToAnnParam m = map (\(v, ty) -> AnnParam (ty, v) True) (M.toList m)
-
 --            stmt list   argmap              arglist               og func  where block  (func, where block)
 trListStmt :: List Stmt -> M.Map String PTy -> List (String, PTy) -> Func -> List ITm -> (ITm, List ITm)
 trListStmt [StSkip] _ _ _ _ = error "cannot end with skip i think"
@@ -83,7 +71,7 @@ trListStmt [] _ _ _ i = (ITmUnit, i)
 trListStmt [StBlock s] m ls f i = trListStmt s m ls f i
 trListStmt (StBlock s : xs) m ls f i = trListStmt (s ++ xs) m ls f i
 trListStmt [StReturn t] _ _ _ i = (trTm t, i)
-trListStmt (StReturn t : _ : _) _ _ _ _ = error "return should be the last statement in the block"
+trListStmt (StReturn _ : _ : _) _ _ _ _ = error "return should be the last statement in the block"
 trListStmt (StIf t s1 s2 : xs) m ls f i =
   let (t1, i1) = trListStmt (s1 : xs) m ls f i
       (t2, i2) = trListStmt (s2 : xs) m ls f (i ++ i1)
@@ -104,11 +92,11 @@ trListStmt (StAssign x t : xs) m ls f i =
 trListStmt (StWhile t s : xs) m ls f i =
   let (body, innerName, innerParams) = defOuter (funcName f) (funcArgs f ++ map ((`AnnParam` True) . swap) ls) (length i)
       innerFunc = defInner t s innerName (funcRetTy f) xs innerParams False
-   in (\(x, y) -> (x, (ITmFunc $ trFunc innerFunc) : y)) (trBody body f)
+   in (\(x, y) -> (x, ITmFunc (trFunc innerFunc) : y)) (trBody body f)
 trListStmt (StEWhile t s : xs) m ls f i =
   let (body, innerName, innerParams) = defOuter (funcName f) (funcArgs f ++ map ((`AnnParam` True) . swap) ls) (length i)
       innerFunc = defInner t s innerName (funcRetTy f) xs innerParams True
-   in (\(x, y) -> (x, (ITmFunc $ trFunc innerFunc) : y)) (trBody body f)
+   in (\(x, y) -> (x, ITmFunc (trFunc innerFunc) : y)) (trBody body f)
 trListStmt (StSwitch Switch {switchOn, cases, defaultCase} : xs) m ls f i =
   let def = case defaultCase of
         Nothing -> []
@@ -120,41 +108,6 @@ trListStmt (StSwitch Switch {switchOn, cases, defaultCase} : xs) m ls f i =
           (map fst branches),
         i ++ concatMap snd branches
       )
-
-defOuter :: String -> List AnnParam -> Int -> (Stmt, String, List AnnParam)
-defOuter funcName funcArgs i =
-  let funcInner = funcName ++ "_rec" ++ show i
-      ps = nubAnnParam M.empty funcArgs []
-   in ( StBlock [StReturn (PTmFuncCall (PTmVar funcInner) (nub $ map (PTmVar . getAnnParamVar) ps))],
-        funcInner,
-        ps
-      )
-
-defInner :: PTm -> Stmt -> String -> PTy -> List Stmt -> List AnnParam -> Bool -> Func
-defInner condition body fname retty tl ps e =
-  let ebdy =
-        StSwitch
-          Switch
-            { switchOn = [trPBool condition],
-              cases =
-                [ Case
-                    { caseOn = [PTmCon "No" [PTmVar "noprf"]],
-                      caseBody = StBlock tl
-                    },
-                  Case
-                    { caseOn = [PTmCon "Yes" [PTmVar "yesprf"]],
-                      caseBody = StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))]
-                    }
-                ],
-              defaultCase = Nothing
-            }
-      bdy = StIf condition (StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))]) (StBlock tl)
-   in Func
-        { funcName = fname,
-          funcArgs = ps,
-          funcRetTy = retty,
-          funcBody = if e then ebdy else bdy
-        }
 
 trTy :: PTy -> ITy
 trTy PTyNat = ITyNat
@@ -204,13 +157,14 @@ trFunc
     { funcName,
       funcRetTy,
       funcArgs,
-      funcBody
+      funcBody,
+      funcEff
     } =
     let (b, w) = trBody funcBody f
         iFuncArgs = map trAnnParam funcArgs
      in IFunc
           { iFuncName = funcName,
-            iFuncRetTy = trTy funcRetTy,
+            iFuncRetTy = if (funcEff == Just IO) then ITyIO (trTy funcRetTy) else trTy funcRetTy,
             iFuncArgs,
             iFuncBody = [(ITmCon funcName (map (ITmVar . getIAnnParamVar) iFuncArgs), b)],
             iWhere = w
@@ -228,6 +182,10 @@ trConstructor
         iConArgs = map trAnnParam conArgs,
         iConTy = trTy conTy
       }
+
+-- ---------------------------
+-- FSM transforms
+-- ---------------------------
 
 mkICon :: String -> String
 mkICon [] = error "empty constructor"
@@ -247,12 +205,6 @@ trAction name (Action {actionName, actionRetTy = (AnnParam (rty, rvar) _), actio
       },
     trFunc actionFunc
   )
-
-noAnnIParam :: ITy -> IAnnParam
-noAnnIParam ty = IAnnParam ("", ty) True
-
-mkITyArg :: ITyDecl -> IAnnParam
-mkITyArg ITyDecl {iTyDeclName, iTyDeclParams, iTyDeclConstructors} = noAnnIParam (ITyCustom iTyDeclName (map (ITmVar . getIAnnParamVar) iTyDeclParams))
 
 -- run resource (action >>= cont) = run resource action >>= (\res, resource => run resource (cont res))
 mkRunBind :: String -> String -> (ITm, ITm)
@@ -339,33 +291,37 @@ mkRun concTy decl =
   let resTy = iTyDeclName decl
       iFuncName = "run" ++ resTy
       mcons = map (\f -> f iFuncName resTy) [mkRunPure, mkRunBind, mkRunLift]
-      cons = map (mkRunAction iFuncName resTy) (map iConName (iTyDeclConstructors decl))
+      cons = map (mkRunAction iFuncName resTy . iConName) (iTyDeclConstructors decl)
       iFuncBody = mcons ++ cons
    in IFunc
         { iFuncName,
           iFuncArgs = [noAnnIParam (getIAnnParamTy concTy), mkITyArg decl],
           iFuncBody,
-          iFuncRetTy = ITyIO $ ITyPair (ITyVar "ty", getIAnnParamTy concTy),
+          iFuncRetTy = ITyIO $ ITyPair (ITyTm (ITmVar "ty"), getIAnnParamTy concTy),
           iWhere = []
         }
 
 trFSM :: FSM -> IFSM
 trFSM FSM {resource, stateTy, initCons, actions} =
-  let idxmName = "idxm" -- todo ++ read resourcety
+  let idxmName = "idxm" ++ show (getAnnParamPTy resource) -- todo ++ read resourcety
       confuncs = map (trAction idxmName) actions
       idxm =
         ITyDecl
           { iTyDeclName = idxmName,
-            iTyDeclParams = [IAnnParam ("ty", ITyTy) True],
+            iTyDeclParams = [IAnnParam ("ty", ITyTy) True, noAnnIParam (ITyCustom stateTy []), noAnnIParam (ITyFunc [(Nothing, ITyTm (ITmVar "ty")), (Nothing, ITyCustom stateTy [])])],
             iTyDeclConstructors = map fst confuncs ++ map (\f -> f idxmName) [mkConPure, mkConBind, mkConLift]
           }
       conc = trAnnParam resource
    in IFSM
         { idxm,
           conc,
-          funcs = map (trFunc . actionFunc) actions,
+          funcs = map (trFunc . actionFunc) actions ++ map trFunc initCons,
           run = mkRun conc idxm
         }
+
+-- -----------------------------
+-- AnnParam and IAnnParam utils
+-- -----------------------------
 
 trAnnParam :: AnnParam -> IAnnParam
 trAnnParam (AnnParam (ty, str) vis) = IAnnParam (str, trTy ty) vis
@@ -387,6 +343,72 @@ getIAnnParamVar (IAnnParam (str, _) _) = str
 
 getIAnnParamTy :: IAnnParam -> ITy
 getIAnnParamTy (IAnnParam (_, ty) _) = ty
+
+noAnnIParam :: ITy -> IAnnParam
+noAnnIParam ty = IAnnParam ("", ty) True
+
+mkITyArg :: ITyDecl -> IAnnParam
+mkITyArg ITyDecl {iTyDeclName, iTyDeclParams, iTyDeclConstructors} = noAnnIParam (ITyCustom iTyDeclName (map (ITmVar . getIAnnParamVar) iTyDeclParams))
+
+-- --------------------------
+-- automatic generation of decidable equality
+-- ----------------------------
+
+-- dependent pattern matching via if statements
+convIf :: ITm -> ITm -> ITm -> ITm
+convIf c t e = ITmMatch [trBool c] [([ITmCon "No" [ITmVar "noprf"]], e), ([ITmCon "Yes" [ITmVar "yesprf"]], t)]
+
+-- takes a function body : Stmt and function itself : Func
+-- converts into a IFunc body and where clause
+trBody :: Stmt -> Func -> (ITm, List ITm)
+trBody x f =
+  let argMap = mapFromFuncArgs (funcArgs f) M.empty
+      args = map (\(AnnParam (ty, str) _) -> (str, ty)) (funcArgs f)
+   in case x of
+        StBlock ls -> trListStmt ls argMap args f []
+        _ -> trListStmt [x] argMap args f []
+
+mapFromFuncArgs :: List AnnParam -> M.Map String PTy -> M.Map String PTy
+mapFromFuncArgs [] m = m
+mapFromFuncArgs ((AnnParam (ty, var) _) : xs) m = mapFromFuncArgs xs (M.insert var ty m)
+
+mapToAnnParam :: M.Map String PTy -> List AnnParam
+mapToAnnParam m = map (\(v, ty) -> AnnParam (ty, v) True) (M.toList m)
+
+defOuter :: String -> List AnnParam -> Int -> (Stmt, String, List AnnParam)
+defOuter funcName funcArgs i =
+  let funcInner = funcName ++ "_rec" ++ show i
+      ps = nubAnnParam M.empty funcArgs []
+   in ( StBlock [StReturn (PTmFuncCall (PTmVar funcInner) (nub $ map (PTmVar . getAnnParamVar) ps))],
+        funcInner,
+        ps
+      )
+
+defInner :: PTm -> Stmt -> String -> PTy -> List Stmt -> List AnnParam -> Bool -> Func
+defInner condition body fname retty tl ps e =
+  let ebdy =
+        StSwitch
+          Switch
+            { switchOn = [trPBool condition],
+              cases =
+                [ Case
+                    { caseOn = [PTmCon "No" [PTmVar "noprf"]],
+                      caseBody = StBlock tl
+                    },
+                  Case
+                    { caseOn = [PTmCon "Yes" [PTmVar "yesprf"]],
+                      caseBody = StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))]
+                    }
+                ],
+              defaultCase = Nothing
+            }
+      bdy = StIf condition (StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))]) (StBlock tl)
+   in Func
+        { funcName = fname,
+          funcArgs = ps,
+          funcRetTy = retty,
+          funcBody = if e then ebdy else bdy
+        }
 
 dontDoTheseTypes :: [ITy]
 dontDoTheseTypes =
