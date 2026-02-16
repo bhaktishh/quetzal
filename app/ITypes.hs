@@ -44,6 +44,7 @@ data ITm
   | ITmMatchImpossible (List ITm) (List ITm)
   | ITmLet String (Maybe ITy) ITm ITm
   | ITmLam (List ITm) ITm
+  | ITmDo (List ITmDo)
   | ITmBind ITm ITm -- ITmBind a b = a >>= b
   deriving (Show, Eq)
 
@@ -79,7 +80,7 @@ data IDecl = ITy ITyDecl | IRec IRecDecl
 
 type IProg = List IProgEl
 
-data IProgEl = IIDecl IDecl | IIFunc IFunc | IIImport String
+data IProgEl = IIDecl IDecl | IIFunc IFunc | IIImport String | IIFSM IFSM 
   deriving (Show, Eq)
 
 data IFunc = IFunc
@@ -115,5 +116,12 @@ data IFSM = IFSM
   { idxm :: ITyDecl,
     conc :: IAnnParam,
     funcs :: List IFunc,
-    run :: IFunc
-  }
+    run :: IFunc, 
+    iexec :: IFunc
+  } deriving (Show, Eq)
+
+data ITmDo = ITmDoLet String (Maybe ITy) ITm
+            | ITmDoBind (List String) ITm
+            | ITmDoCase (List ITm) (List (List ITm, ITm))
+            | ITmDoPure ITm
+             deriving (Show, Eq)

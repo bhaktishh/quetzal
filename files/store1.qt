@@ -50,11 +50,9 @@ impl FSM {
     [IO] func readSecret() returns String {
         return st.secret;
     }
-}
-
-[IO] func main() {
-    Store st = initStore("secret", "pub"); 
-    LoginResult res = st.login(); 
+} with exec [IO] func main() {
+    Store st = initStore("secret", "pub");
+    LoginResult res = st.login();
     if (res == OK) {
         String secret = st.readSecret(); 
         IO.print(secret);

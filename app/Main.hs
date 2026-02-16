@@ -12,7 +12,6 @@ import Unparse
 -- how many passes is too many passes
 -- also shouldn't idris handle all that
 -- maybe idris shouldn't maybe this should have a dependent typechecker of its own
--- maybe the goal is efficiency and i can do the custom data representation stuff
 
 -- variables must begin with a lowercase letter
 -- type metavariables must be all uppercase
@@ -36,6 +35,7 @@ doFuncs :: ProgEl -> IProgEl
 doFuncs (PFunc f) = IIFunc $ trFunc f
 doFuncs (PDecl x) = IIDecl $ trDecl x
 doFuncs (PImport x) = IIImport x
+doFuncs (PFSM fsm) = IIFSM $ trFSM fsm 
 
 writeIdris :: IProg -> String -> IO ()
 writeIdris p fpath = writeFile fpath (unparse p)

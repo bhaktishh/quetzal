@@ -1,3 +1,29 @@
-action login returns LoginResult r [LoggedOut --> (r == OK) ? LoggedIn : LoggedOut];
-[IO] func login() returns LoginResult {
+impl FSM {
+    resource = Store st;
+    stateTy = Access;
+
+    action login returns LoginResult r [LoggedOut --> (r == OK)? LoggedIn : LoggedOut];
+    [IO] func login() returns LoginResult {
+        return 0; 
+    }
+    action logout [LoggedIn --> LoggedOut];
+    [IO] func logout() {
+        return 1; 
+    }
+
+    action readSecret returns String [LoggedIn];
+    [IO] func readSecret() returns String {
+        return st;
+    }
+} with exec [IO] func main() {
+    String secret = secret; 
+    Store st = initStore(a, b);
+    LoginResult res = st.login();
+    if (res == OK) {
+        String secret = st.readSecret(); 
+        IO.print(secret);
+        st.logout();
+    } else {
+        IO.print();
+    }
 }

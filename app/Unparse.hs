@@ -6,6 +6,7 @@ import Control.Monad.State.Lazy
 import Data.List (intercalate)
 import ITypes
 import PToI (deriveDecEq)
+import Data.Maybe (fromMaybe)
 
 type Indent a = State (Int, Bool) a
 
@@ -33,6 +34,19 @@ uProg (x : xs) = case x of
   IIImport m -> do
     pr <- uProg xs
     pure $ "import " ++ m ++ "\n\n" ++ pr
+  IIFSM fsm -> do -- TODO 
+    fsm <- uFSM fsm 
+    pr <- uProg xs 
+    pure $ fsm ++ "\n\n" ++ pr 
+
+uFSM :: IFSM -> Indent String 
+uFSM IFSM {idxm, conc, funcs, run, iexec} = do 
+  sidxm <- uTyDecl idxm 
+  sfuncs <- mapM uFuncs funcs 
+  srun <- uFuncs run 
+  sexec <- uFuncs iexec 
+  pure $ sidxm ++ "\n\n" ++ intercalate "\n\n" sfuncs ++ "\n\n" ++ srun ++ "\n\n" ++ sexec ++ "\n\n"
+
 
 uTypes :: IDecl -> Indent String
 uTypes (ITy tdecl) = uTyDecl tdecl
@@ -103,7 +117,7 @@ uAnnParam arrow (IAnnParam (var, ty) vis) = do
   put (ind, False)
   t <- uTy ty
   put (ind, tt)
-  pure $ (if vis then "(" else "{") ++ var ++ " : " ++ t ++ (if vis then ")" else "}") ++ (if arrow then " -> " else " ")
+  pure $ (if vis then "(" else "{") ++ (if var /= "" then var ++ " : " else "") ++ t ++ (if vis then ")" else "}") ++ (if arrow then " -> " else " ")
 
 uTy :: ITy -> Indent String
 uTy ITyNat = pure "Nat"
@@ -314,7 +328,7 @@ uTm (ITmLam v tm) = do
   vs <- mapM uTm v
   tm <- uTm tm
   put (ind, t)
-  pure $ indent t ind ++ putParens ("\\" ++ (intercalate " " vs) ++ " => " ++ tm) -- todo check
+  pure $ indent t ind ++ putParens ("\\" ++ putParens (intercalate ", " vs) ++ " => " ++ tm) -- todo check
 uTm (ITmPair t1 t2) = do
   (ind, t) <- get
   put (ind, False)
@@ -327,6 +341,61 @@ uTm (ITmBind t1 t2) = do
   t1' <- uTm t1
   t2' <- uTm t2
   pure $ indent t ind ++ putParens t1' ++ " >>= " ++ putParens t2'
+uTm (ITmDo d) = do 
+  (ind, t) <- get 
+  put (ind + 1, True)
+  dos <- mapM uTmDo d 
+  put (ind, t)
+  pure $ indent t ind ++ "do \n" ++ intercalate "\n" dos 
+
+uTmDo :: ITmDo -> Indent String 
+uTmDo (ITmDoLet v ty x) = do 
+  (ind, t) <- get
+  put (ind, False)
+  ty <- uTy (fromMaybe ITyHole ty)
+  tm <- uTm x
+  pure $ indent t ind ++ "let " ++ v ++ " : " ++ ty ++ " = " ++ tm
+uTmDo (ITmDoBind xs x) = do 
+  (ind, t) <- get 
+  put (ind, False)
+  tm <- uTm x
+  pure $ indent t ind ++ putParens (intercalate "," xs) ++ " <- " ++ tm 
+uTmDo (ITmDoCase ons branches) = do 
+  (ind, t) <- get
+  put (ind, False)
+  on <- mapM uTm ons
+  put (ind + 1, True)
+  cases <-
+    mapM
+      ( \(xs, v) -> do
+          (ind, t) <- get
+          put (ind, False)
+          xs <- mapM uTm xs
+          put (ind, False)
+          v <- uTm v
+          pure (xs, v)
+      ) branches 
+  put (ind, t)
+  pure $
+    indent t ind
+      ++ "(case "
+      ++ "("
+      ++ intercalate "," on
+      ++ ")"
+      ++ " of\n"
+      ++ indent True (ind + 1)
+      ++ intercalate
+        ("\n" ++ indent True (ind + 1))
+        (map (\(xs, tm) -> "(" ++ intercalate "," xs ++ ")" ++ " => " ++ tm) cases)
+      ++ ")"
+uTmDo (ITmDoPure tm) = do 
+  (ind, t) <- get 
+  put (ind, False)
+  tm' <- uTm tm 
+  put (ind, t)
+  pure $ indent t ind ++ "pure " ++ tm'
+
+
 
 uFuncs :: IFunc -> Indent String
 uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
@@ -334,9 +403,9 @@ uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
   put (ind, False)
   retty <- uTy iFuncRetTy
   args <- mapM (uAnnParam True) iFuncArgs
-  put (ind + 1, True)
+  -- put (ind + 1, True)
   bodies <- mapM (\(l, body) -> (,) <$> uTm l <*> uTm body) iFuncBody
-  put (ind, False)
+  -- put (ind, False)
   deps <-
     mapM
       ( \i -> do

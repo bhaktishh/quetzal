@@ -119,12 +119,16 @@ pFSM = do
   initCons <- try $ many (pSpaces pFunc)
   actions <- try $ many (pSpaces pAction)
   _ <- pSpaces $ char '}'
+  _ <- pSpaces $ string "with"
+  _ <- pSpaces $ string "exec"
+  exec <- pSpaces pFunc 
   pure $
     FSM
       { resource,
         stateTy,
         initCons,
-        actions
+        actions,
+        exec
       }
 
 pEff :: Parser Eff
@@ -150,7 +154,8 @@ pFunc = do
         funcArgs,
         funcRetTy,
         funcBody,
-        funcEff
+        funcEff, 
+        funcRun=Nothing
       }
 
 mkAnnParam :: Bool -> (PTy, String) -> AnnParam
@@ -279,7 +284,6 @@ pAssign = do
 
 pDeclAssign :: Parser Stmt
 pDeclAssign = do
-  _ <- pSpaces $ string "let"
   (ty, var) <- try ((,) <$> optional (pSpaces pPTy) <*> pSpaces pLowerStr) <|> (,) Nothing <$> pSpaces pLowerStr
   _ <- pSpaces $ char '='
   rhs <- pSpaces pPTm
@@ -345,6 +349,7 @@ pStmt0 =
     <|> try pStIf
     <|> try pStEIf
     <|> try pStSwitch
+    <|> try pStDot
 
 pPlusPTm :: Parser PTm
 pPlusPTm = do
@@ -474,6 +479,14 @@ pStSwitch = do
           defaultCase
         }
 
+pStDot :: Parser Stmt 
+pStDot = do
+  t1 <- pSpaces pPTm0
+  _ <- char '.'
+  PTmFuncCall f xs <- pSpaces pFuncCall
+  _ <- pSpaces $ char ';'
+  pure $ StDot t1 f xs
+
 pDefault :: Parser Case
 pDefault = do
   _ <- pSpaces $ string "default"
@@ -527,12 +540,12 @@ pPTyFunc = do
         tyFuncRetTy
       }
 
-pPTmDot :: Parser PTm
-pPTmDot = do
+pTmDot :: Parser PTm 
+pTmDot = do
   t1 <- pSpaces pPTm0
   _ <- char '.'
-  t2 <- pSpaces pPTm0
-  pure $ PTmDot t1 t2
+  PTmFuncCall f xs <- pSpaces pFuncCall
+  pure $ PTmDot t1 f xs
 
 pTyHole :: Parser PTy
 pTyHole = pSpaces (char '?') >> pure PTyHole
@@ -564,7 +577,7 @@ pPTm1 =
     <|> try pPTmCon
     <|> try pIf
     <|> try pTernary
-    <|> try pPTmDot
+    <|> try pTmDot 
     <|> try pPTm0
 
 pPTm0 :: Parser PTm

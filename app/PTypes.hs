@@ -29,7 +29,7 @@ data PTy
 
 data PTm
   = PTmNat Nat
-  | PTmDot PTm PTm
+  | PTmDot PTm PTm (List PTm) -- a.f() ---> let a = f a ; x = a.f(b, c) ---> let (x, a) = f a b c
   | PTmPlus PTm PTm
   | PTmMinus PTm PTm
   | PTmMult PTm PTm
@@ -52,6 +52,17 @@ data PTm
   | PTmFuncCall PTm (List PTm)
   | PTmIf PTm PTm PTm
   deriving (Show, Eq)
+
+myShowTm :: PTm -> String   
+myShowTm (PTmNat x) = show x 
+myShowTm (PTmVar s) = s 
+myShowTm PTmWildCard = "_"
+myShowTm x = show x 
+
+myShowTy :: PTy -> String 
+myShowTy (PTyPTm t) = myShowTm t
+myShowTy (PTyCustom {tyName, tyParams}) = tyName 
+myShowTy x = show x 
 
 data Switch = Switch
   { switchOn :: List PTm,
@@ -83,6 +94,7 @@ data Stmt
   | StBlock (List Stmt)
   | StSwitch Switch
   | StSkip
+  | StDot PTm PTm (List PTm )
   deriving (Show, Eq)
 
 data Eff = IO | Other deriving (Show, Eq)
@@ -92,7 +104,8 @@ data Func = Func
     funcRetTy :: PTy,
     funcArgs :: List AnnParam,
     funcBody :: Stmt,
-    funcEff :: Maybe Eff
+    funcEff :: Maybe Eff,
+    funcRun :: Maybe String -- run function if f associated with FSM
   }
   deriving (Show, Eq)
 
@@ -134,6 +147,7 @@ data FSM = FSM
   { resource :: AnnParam,
     stateTy :: String,
     initCons :: List Func,
-    actions :: List Action
+    actions :: List Action,
+    exec :: Func 
   }
   deriving (Show, Eq)
