@@ -4,8 +4,10 @@ import ITypes
 import PToI
 import PTypes
 import Parse
-import Text.Megaparsec (parse, runParser)
+import Text.Megaparsec (errorBundlePretty, parse, runParser)
 import Unparse
+import Data.List (uncons)
+import System.Environment (getArgs)
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
 -- is there a way i can add a list of variables and types to carry around? or should that be a second pass
@@ -19,7 +21,11 @@ import Unparse
 -- non parameterized types must include "<>"
 
 main :: IO ()
-main = error "idk"
+main = do
+    args <- getArgs
+    case uncons args of
+        Nothing -> error "Usage: quetzal-exe <.qt file>. Processed result gets written to files/test.idr"
+        Just (x, _) -> processFile x
 
 -- -- parsing utils
 parseFromFile p file = runParser p file <$> readFile file
@@ -28,14 +34,15 @@ processFile :: String -> IO ()
 processFile file = do
   x <- readFile file
   case parse pProg "" x of
-    Left _ -> error "wtf"
-    Right tm -> writeIdris (map doFuncs tm) "files/test.idr"
+    Left err -> putStr . errorBundlePretty $ err
+    Right tm -> do
+        writeIdris (map doFuncs tm) "files/test.idr"
 
 doFuncs :: ProgEl -> IProgEl
 doFuncs (PFunc f) = IIFunc $ trFunc f
 doFuncs (PDecl x) = IIDecl $ trDecl x
 doFuncs (PImport x) = IIImport x
-doFuncs (PFSM fsm) = IIFSM $ trFSM fsm 
+doFuncs (PFSM fsm) = IIFSM $ trFSM fsm
 
 writeIdris :: IProg -> String -> IO ()
 writeIdris p fpath = writeFile fpath (unparse p)
