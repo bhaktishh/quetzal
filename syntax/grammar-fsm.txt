@@ -1,0 +1,62 @@
+<prog> := { <import> | <ty-decl> | <rec-decl> | <func> | <fsm> }
+
+<import> := "import" <module>
+<module> := <u-ident> { "." <u-ident> }
+
+<ty-decl> := "type" <u-ident> [ "<" <ty-params> ">" ] [ "(" <ty-params> ")" ] "{" { <cnstr-decl> } "}"
+<cnstr-decl> := "constructor" <u-ident> [ "<" <ty-params> ">" ] [ "(" <ty-params> ")" ] [ "of" <type> ] ";" 
+<rec-decl> := "record" <u-ident> [ "<" <ty-params> ">" ] [ "(" <ty-params> ")" ] "{" { <type> <l-ident> ";" } "}" 
+
+<ty-params> := <ty-param> { "," <ty-param> }
+<ty-param> := <type> [ <l-ident> ]
+
+<func> := [ "[" <eff> "]" ] "func" <l-ident> "(" [ <type> <l-ident> { "," <type> <l-ident> } ] ")" [ "returns" <type> ] "{" <stmt> "}" 
+
+<fsm> := "impl" "FSM" "{" "resource" "=" <type> <l-ident> ";" "stateTy" "=" <type> ";" { <action> <func> }
+        "}" "with" "init" <func> "with" "exec" <func> 
+
+<action> := "action" <l-ident> [ "returns" <ty-param> ] "[" <term> [ "-->" <term> ] "]"
+
+<type> := "Nat" | "Bool" | "String" | "Char" | "()" | "Ty" 
+        | "Func" "(" TODO "=>" <type> ")"
+        | <u-ident> [ "<" <terms> ">" ] [ "(" <terms> ")" ] 
+        | "List" <type> 
+
+<term> := <nat> | <bool> | "\"" <string> "\"" | "'" <char> "'" | "()" 
+        | <l-ident> 
+        | <term> ( "+" | "-" | "*" | "/" | "%" ) <term>
+        | "(" <term> "," <term> ")" 
+        | "if" "(" <term> ")" "{" <term> "}" "else" "{" <term> "}"
+        | "(" <term> ")" "?" <term> ":" <term> 
+        | <term> "(" [ <terms> ] ")"
+        | <type> 
+        | "[" [ <terms> ] "]" 
+        | <u-ident> [ "(" <terms> ")" ]
+        | <term> ( "&&" | "||" ) <term> | "!" <term> 
+        | <term> ( "==" | "<" | "<=" | ">" | ">=" ) <term>
+        | <term> "." <term> 
+<terms> := <term> { "," <term> }
+
+<stmt> := ";;"
+        | [ <type> ] <l-ident> "=" <term> | ";"
+        | "return" <term> ";"
+        | "if" "(" <term> ")" "{" <stmt> "}" "else" "{" <stmt> "}"
+        | "eif" "(" <term> ")" "{" <stmt> "}" "else" "{" <stmt> "}"
+        | "while" "(" <term> ")" "{" <stmt> "}"
+        | "ewhile" "(" <term> ")" "{" <stmt> "}"
+        | ( <term> | <eff> ) "." <term> "(" { <term> } ")" ";"
+        | "switch" "(" <terms> ")" "{" { <case> } [ <default> ] "}" 
+        | { <stmt> }
+
+<case> := "case" "(" <terms> ")" "{" <stmt> "}"
+<default> := "default" "{" <stmt> "}"
+
+<nat> := <digit> { <digit> }
+
+<u-ident> := <u-char> { ( <u-char> | <l-char> ) }
+<l-ident> := <l-char> { ( <u-char> | <l-char> ) }
+
+<digit> := "0".."9"
+<u-char> := "A".."Z"
+<l-char> := "a".."z"
+
