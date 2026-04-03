@@ -11,7 +11,7 @@ data ITy
   | ITyFunc (List (Maybe String, ITy))
   | ITyCustom String (List ITm)
   | ITyList ITy
-  | ITyPair (ITy, ITy)
+  | ITyPair ITy ITy 
   | ITyIO ITy
   | ITyTm ITm
   | ITyHole
@@ -21,6 +21,7 @@ data ITm
   = ITmNat Nat
   | ITmWildCard
   | ITmPlus ITm ITm
+  | ITmString String 
   | ITmMinus ITm ITm
   | ITmMult ITm ITm
   | ITmDiv ITm ITm
@@ -45,6 +46,7 @@ data ITm
   | ITmLet String (Maybe ITy) ITm ITm
   | ITmLam (List ITm) ITm
   | ITmDo (List ITmDo)
+  | ITmDot ITm ITm -- record field access
   | ITmBind ITm ITm -- ITmBind a b = a >>= b
   deriving (Show, Eq)
 
@@ -121,7 +123,9 @@ data IFSM = IFSM
   } deriving (Show, Eq)
 
 data ITmDo = ITmDoLet String (Maybe ITy) ITm
-            | ITmDoBind (List String) ITm
+            | ITmDoBind (List String) ITm -- (a,b..) <- tm
             | ITmDoCase (List ITm) (List (List ITm, ITm))
             | ITmDoPure ITm
+            | ITmDoIf ITm ITm ITm
+            | ITmDoIO ITm 
              deriving (Show, Eq)

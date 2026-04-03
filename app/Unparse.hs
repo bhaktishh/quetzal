@@ -135,8 +135,8 @@ uTy (ITyFunc args) = do
   pure $ intercalate " -> " args
 uTy (ITyTm t) = uTm t
 uTy (ITyList t) = (++) "List " <$> uTy t
-uTy ITyHole = pure $ "?"
-uTy (ITyPair (t1, t2)) = do
+uTy ITyHole = pure "?"
+uTy (ITyPair t1 t2) = do
   (ind, t) <- get
   put (ind, False)
   t1' <- uTy t1
@@ -157,6 +157,17 @@ uTm (ITmNat n) = do
   (ind, t) <- get
   put (ind, False)
   pure $ indent t ind ++ show n
+uTm (ITmString s) = do
+  (ind, t) <- get
+  put (ind, False)
+  pure $ indent t ind ++ "\"" ++ s ++ "\""
+uTm (ITmDot a b) = do 
+  (ind, t) <- get 
+  put (ind, False)
+  a' <- uTm a
+  b' <- uTm b
+  put (ind, t)
+  pure $ indent t ind ++ a' ++ "." ++ b' 
 uTm ITmWildCard = do
   (ind, t) <- get
   put (ind, False)
@@ -354,11 +365,13 @@ uTmDo (ITmDoLet v ty x) = do
   put (ind, False)
   ty <- uTy (fromMaybe ITyHole ty)
   tm <- uTm x
+  put (ind, t)
   pure $ indent t ind ++ "let " ++ v ++ " : " ++ ty ++ " = " ++ tm
 uTmDo (ITmDoBind xs x) = do 
   (ind, t) <- get 
   put (ind, False)
   tm <- uTm x
+  put (ind, t)
   pure $ indent t ind ++ putParens (intercalate "," xs) ++ " <- " ++ tm 
 uTmDo (ITmDoCase ons branches) = do 
   (ind, t) <- get
@@ -394,8 +407,20 @@ uTmDo (ITmDoPure tm) = do
   tm' <- uTm tm 
   put (ind, t)
   pure $ indent t ind ++ "pure " ++ tm'
-
-
+uTmDo (ITmDoIf c t e) = do 
+  (ind, b) <- get
+  put (ind, False)
+  c' <- uTm c 
+  t' <- uTm t 
+  e' <- uTm e 
+  put (ind, b)
+  pure $ indent b ind ++ "if " ++ putParens c' ++ " then " ++ putParens t' ++ " else " ++ putParens e' 
+uTmDo (ITmDoIO tm) = do 
+  (ind, t) <- get
+  put (ind, False)
+  tm' <- uTm tm 
+  put (ind, t)
+  pure $ indent t ind ++ tm'
 
 uFuncs :: IFunc -> Indent String
 uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do

@@ -6,6 +6,7 @@ import PTypes
 import Parse
 import Text.Megaparsec (parse, runParser)
 import Unparse
+import System.Environment (getArgs)
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
 -- is there a way i can add a list of variables and types to carry around? or should that be a second pass
@@ -19,17 +20,19 @@ import Unparse
 -- non parameterized types must include "<>"
 
 main :: IO ()
-main = error "idk"
+main = do 
+  [inpf, outpf] <- getArgs 
+  processFile inpf outpf 
 
 -- -- parsing utils
 parseFromFile p file = runParser p file <$> readFile file
 
-processFile :: String -> IO ()
-processFile file = do
-  x <- readFile file
+processFile :: String -> String -> IO ()
+processFile inpf outpf = do
+  x <- readFile inpf   
   case parse pProg "" x of
     Left _ -> error "wtf"
-    Right tm -> writeIdris (map doFuncs tm) "files/test.idr"
+    Right tm -> writeIdris (map doFuncs tm) outpf 
 
 doFuncs :: ProgEl -> IProgEl
 doFuncs (PFunc f) = IIFunc $ trFunc f

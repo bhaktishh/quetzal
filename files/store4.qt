@@ -1,0 +1,57 @@
+type Access {
+    constructor LoggedIn; 
+    constructor LoggedOut; 
+}
+
+type LoginResult {
+    constructor OK;
+    constructor BadPassword;
+}
+
+record Store {
+    String secret;
+    String pub; 
+}
+
+-- record; can also be instantiated like FSM(Store, Access)
+-- `this` refers to the resource object, assumed to be initialised; accessible within
+FSM(resourceType=Store, stateType=Access) {
+
+    @action login returns LoginResult r [LoggedOut --> (r == OK) ? LoggedIn : LoggedOut]
+    [IO] func login() returns LoginResult {
+        IO.print("enter password");
+        String pw = IO.getLine();
+        if (pw == "password123") {
+            return OK;
+        } else {
+            return BadPassword;
+        }
+    }
+
+    @action logout [LoggedIn --> LoggedOut]
+        [IO] func logout() {
+            IO.print("logging out");
+        }
+
+    @action readSecret returns String [LoggedIn]
+    [IO] func readSecret() returns String {
+            return this.secret;
+    }
+}
+
+@init FSM(Store, Access)
+func mkStore(String secret, String pub) returns Store {
+    return Store(secret, pub);
+}
+
+@run FSM(Store, Access) with this = mkStore("secret", "pub") [LoggedOut]
+[IO] func main() {
+    LoginResult res = this.login();
+    if (res == OK) {
+        String secret = this.readSecret(); 
+        IO.print(secret);
+        this.logout();
+    } else {
+        IO.print("bad password");
+    }
+}

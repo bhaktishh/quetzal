@@ -1,3 +1,5 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 module PTypes where
 
 import GHC.TypeLits (Nat)
@@ -24,13 +26,17 @@ data PTy
       }
   | PTyList PTy
   | PTyPTm PTm
+  | PTyPair PTy PTy
   | PTyHole
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 data PTm
   = PTmNat Nat
+  | PTmDotRec PTm PTm -- a.b = b field of record a
   | PTmDot PTm PTm (List PTm) -- a.f() ---> let a = f a ; x = a.f(b, c) ---> let (x, a) = f a b c
   | PTmPlus PTm PTm
+  | PTmPair PTm PTm
+  | PTmString String
   | PTmMinus PTm PTm
   | PTmMult PTm PTm
   | PTmDiv PTm PTm
@@ -51,31 +57,31 @@ data PTm
   | PTmFunc Func
   | PTmFuncCall PTm (List PTm)
   | PTmIf PTm PTm PTm
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
-myShowTm :: PTm -> String   
-myShowTm (PTmNat x) = show x 
-myShowTm (PTmVar s) = s 
+myShowTm :: PTm -> String
+myShowTm (PTmNat x) = show x
+myShowTm (PTmVar s) = s
 myShowTm PTmWildCard = "_"
-myShowTm x = show x 
+myShowTm x = show x
 
-myShowTy :: PTy -> String 
+myShowTy :: PTy -> String
 myShowTy (PTyPTm t) = myShowTm t
-myShowTy (PTyCustom {tyName, tyParams}) = tyName 
-myShowTy x = show x 
+myShowTy (PTyCustom {tyName, tyParams}) = tyName
+myShowTy x = show x
 
 data Switch = Switch
   { switchOn :: List PTm,
     cases :: List Case,
     defaultCase :: Maybe Case
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 data Case = Case
   { caseOn :: List PTm,
     caseBody :: Stmt
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 data Stmt
   = StDeclAssign (Maybe PTy) String PTm
@@ -94,10 +100,11 @@ data Stmt
   | StBlock (List Stmt)
   | StSwitch Switch
   | StSkip
-  | StDot PTm PTm (List PTm )
-  deriving (Show, Eq)
+  | StDot PTm PTm (List PTm)
+  | StIODot PTm (List PTm)
+  deriving (Show, Eq, Ord)
 
-data Eff = IO | Other deriving (Show, Eq)
+data Eff = IO | Other deriving (Show, Eq, Ord)
 
 data Func = Func
   { funcName :: String,
@@ -105,9 +112,9 @@ data Func = Func
     funcArgs :: List AnnParam,
     funcBody :: Stmt,
     funcEff :: Maybe Eff,
-    funcRun :: Maybe String -- run function if f associated with FSM
+    funcDirective :: Maybe Directive
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 data Decl = PTy TyDecl | Rec RecDecl
   deriving (Show, Eq)
@@ -133,21 +140,48 @@ data Constructor = Constructor
   }
   deriving (Show, Eq)
 
-data AnnParam = AnnParam (PTy, String) Bool deriving (Show, Eq) -- explicit = true or false. default true
+data AnnParam = AnnParam (PTy, String) Bool deriving (Show, Eq, Ord) -- explicit = true or false. default true
 
 data Action = Action
   { actionName :: String,
-    actionRetTy :: AnnParam,
+    actionRetTy :: (PTy, Maybe String),
     actionStTrans :: (PTm, PTm),
     actionFunc :: Func
   }
   deriving (Show, Eq)
 
 data FSM = FSM
-  { resource :: AnnParam,
-    stateTy :: String,
+  { resourceTy :: PTy,
+    resource :: AnnParam,
+    stateTy :: PTy,
     initCons :: List Func,
-    actions :: List Action,
-    exec :: Func 
+    actions :: List Action
   }
   deriving (Show, Eq)
+
+-- data FSMExec = FSMExec
+--   { resourceTyExec :: PTy,
+--     stateTyExec :: PTy,
+--     execRes :: AnnParam,
+--     initFuncCall :: PTm,
+--     execFunc :: Func,
+--     execSt :: (PTm, PTm)
+--   }
+
+data DirectiveSub = DFSM PTy PTy deriving (Show, Eq, Ord) -- FSM(Store, Access) = DFSM Store Access
+
+data DirectiveTy
+  = DAction
+      { directiveReturns :: (PTy, Maybe String), -- eg returns LoginResult r
+        directiveStTrans :: (PTm, PTm)
+      }
+  | DInit
+  | DRun
+      { directiveReturns :: (PTy, Maybe String),
+        directiveWith :: (String, PTm), -- eg with this = mkStore("secret", "pub")
+        directiveStTrans :: (PTm, PTm)
+      }
+  deriving (Show, Eq, Ord)
+
+data Directive = Directive DirectiveSub DirectiveTy
+  deriving (Show, Eq, Ord)
