@@ -13,7 +13,13 @@ record Store {
     String pub; 
 }
 
-@action FSM(Store, Access) returns LoginResult r [LoggedOut --> (r == OK) ? LoggedIn : LoggedOut]
+-- single line comment
+
+{-- this is a
+    multiline  
+    comment --} 
+
+#action FSM(Store, Access) returns LoginResult r [LoggedOut --> (r == OK) ? LoggedIn : LoggedOut]
 [IO] func login() returns LoginResult {
     IO.print("enter password");
     String pw = IO.getLine();
@@ -24,25 +30,25 @@ record Store {
     }
 }
 
-@action FSM(Store, Access) [LoggedIn --> LoggedOut]
+#action FSM(Store, Access) [LoggedIn --> LoggedOut]
 [IO] func logout() {
     IO.print("logging out");
 }
 
-@action FSM(Store, Access) returns String [LoggedIn]
+#action FSM(Store, Access) returns String [LoggedIn]
 [IO] func readSecret() returns String {
         return this.secret;
 }
 
-@init FSM(Store, Access)
+#init FSM(Store, Access)
 func mkStore(String secret, String pub) returns Store {
     return Store(secret, pub);
 }
 
-@run FSM(Store, Access) with this = mkStore("secret", "pub") [LoggedOut]
+#run FSM(Store, Access) with this = mkStore("secret", "pub") [LoggedOut]
 [IO] func main() {
     LoginResult res = this.login();
-    if (res == OK) {
+    eif (res == OK) {
         String secret = this.readSecret(); 
         IO.print(secret);
         this.logout();

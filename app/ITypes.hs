@@ -118,8 +118,7 @@ data IFSM = IFSM
   { idxm :: ITyDecl,
     conc :: IAnnParam,
     funcs :: List IFunc,
-    run :: IFunc, 
-    iexec :: IFunc
+    run :: IFunc 
   } deriving (Show, Eq)
 
 data ITmDo = ITmDoLet String (Maybe ITy) ITm

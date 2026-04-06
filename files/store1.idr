@@ -50,8 +50,8 @@ run store (action >>= cont) = do
     (res, store) <- run store action
     run store (cont res)
 
-main : Store () LoggedOut (const LoggedOut)
-main = do
+main' : Store () LoggedOut (const LoggedOut)
+main' = do
     res <- Login
     case res of 
         OK => do 
@@ -62,8 +62,8 @@ main = do
             _ <- Lift $ putStr "bad password"
             Pure () 
             
-main' : IO ()
-main' = do 
+main : IO ()
+main = do 
     let st = initStore
     (_, store) <- run st main
     pure ()

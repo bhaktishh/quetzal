@@ -98,16 +98,24 @@ pImport = do
   m <- pSpaces $ pUpperStr `sepBy` char '.'
   pure $ PImport (intercalate "." m)
 
+getFuncs :: Prog -> List Func 
+getFuncs [] = []
+getFuncs (PFunc f : xs) = f : getFuncs xs
+
 pProg :: Parser Prog
 pProg = do
   prog <- many (pSpaces pProgEl) <* eof
-  -- let mkFSMs = mkFSMs prog
-  pure prog
+  let kvs = foldr mkFSMs M.empty (getFuncs prog)
+  -- TODO should we store a map of some sort for easy identification of exec func data 
+  -- i dont think this will be necessary actually but will keep around to try later 
+  pure $ (PFSM <$> M.elems kvs) ++ prog
 
-mkFSMs1 :: Func -> M.Map DirectiveSub FSM -> M.Map DirectiveSub FSM
-mkFSMs1 f kvs = case funcDirective f of
+-- add global FSM structures populated with init and action directive funcs
+mkFSMs :: Func -> M.Map DirectiveSub FSM -> M.Map DirectiveSub FSM
+mkFSMs f kvs = case funcDirective f of
   Nothing -> kvs
   Just (Directive dSub@(DFSM res st) dTy) -> case M.lookup dSub kvs of
+    -- this fsm is not in the global directory 
     Nothing ->
       let fsmNew =
             FSM
@@ -128,8 +136,20 @@ mkFSMs1 f kvs = case funcDirective f of
                       }
                in M.insert dSub (fsmNew {actions = [actionNew]}) kvs
             DInit -> M.insert dSub (fsmNew {initCons = [f]}) kvs
-            DRun {directiveReturns, directiveWith, directiveStTrans} -> undefined
-    Just fsm -> undefined
+            _ -> M.insert dSub fsmNew kvs
+    -- FSM already exists 
+    Just _ -> case dTy of
+      DAction {directiveReturns, directiveStTrans} ->
+        let actionNew =
+              Action
+                { actionName = funcName f,
+                  actionRetTy = directiveReturns,
+                  actionStTrans = directiveStTrans,
+                  actionFunc = f
+                }
+         in M.adjust (\fsm -> fsm {actions = actionNew : actions fsm}) dSub kvs
+      DInit -> M.adjust (\fsm -> fsm {initCons = f : initCons fsm}) dSub kvs
+      _ -> kvs
 
 -- mkFSMs :: Prog -> (Prog, List FSM)
 -- mkFSMs [] = []
@@ -720,6 +740,9 @@ pTmDotRec = do
 pTyHole :: Parser PTy
 pTyHole = pSpaces (char '?') >> pure PTyHole
 
+pPTmThis :: Parser PTm 
+pPTmThis = pSpaces (string "this") >> pure PTmThis
+
 pPTy :: Parser PTy
 pPTy =
   try pPTyBool
@@ -755,6 +778,7 @@ pPTm0 :: Parser PTm
 pPTm0 =
   try (pParens pPTm1)
     <|> try pPTmVar
+    <|> try pPTmThis
     <|> try pPTmWildCard
     <|> try pNat
     <|> try pBool

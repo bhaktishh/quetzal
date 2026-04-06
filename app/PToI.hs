@@ -172,7 +172,72 @@ trRecDecl
         iRecDeclFields = map (trAnnParam . (`AnnParam` True)) recDeclFields
       }
 
+-- innerFuncName    initVar, initVal  resTy
+mkFSMExecOuter :: String -> (String, PTm) -> PTy -> ITm
+mkFSMExecOuter f' (initVar, initCall) resTy =
+  let runFunc = "run" ++ "idxm" ++ myShowTy resTy
+      resVar = "res" ++ "Run" ++ myShowTy resTy
+   in ITmDo
+        [ ITmDoLet initVar Nothing (trTm initCall),
+          -- todo change for ioref
+          ITmDoBind [resVar] (ITmFuncCall (ITmVar runFunc) [ITmVar initVar, ITmVar f']),
+          ITmDoPure $ ITmVar resVar
+        ]
+
+-- TODO need trFSMExecBody like there is trIOBody, for an FSM translation with binds etc correctly
+-- and handling of "this"
+
+mkUpper :: PTm -> PTm
+mkUpper (PTmVar (x : xs)) = PTmVar $ toUpper x : xs
+mkUpper (PTmCon (x : xs) args) = PTmCon (toUpper x : xs) args
+mkUpper x = x
+
+trFSMExecBody :: List Stmt -> List ITmDo
+trFSMExecBody [] = []
+trFSMExecBody [StReturn tm] = [ITmDoPure (trTm tm)]
+trFSMExecBody (StDeclAssign mty lhs rhs : xs) = case rhs of
+  PTmDot PTmThis f args -> ITmDoBind [lhs] (ITmFuncCall (trTm $ mkUpper f) (map trTm args)) : trFSMExecBody xs
+  _ -> ITmDoLet lhs (trTy <$> mty) (trTm rhs) : trFSMExecBody xs
+trFSMExecBody (StAssign lhs rhs : xs) = case rhs of
+  PTmDot PTmThis f args -> ITmDoBind [lhs] (ITmFuncCall (trTm $ mkUpper f) (map trTm args)) : trFSMExecBody xs
+  _ -> ITmDoLet lhs Nothing (trTm rhs) : trFSMExecBody xs
+trFSMExecBody (StIf c t e : xs) = undefined
+trFSMExecBody (StEIf c t e : xs) = undefined
+-- todo check nesting
+trFSMExecBody (StBlock stmts : xs) = trFSMExecBody stmts ++ trFSMExecBody xs
+trFSMExecBody (StSwitch sw : xs) = undefined
+trFSMExecBody (StSkip : xs) = trFSMExecBody xs
+trFSMExecBody (StDot PTmThis f args : xs) = ITmDoBind ["_"] (ITmFuncCall (trTm $ mkUpper f) (map trTm args)) : trFSMExecBody xs
+trFSMExecBody (StIODot f args : xs) = ITmDoBind ["_"] (ITmFuncCall (ITmVar "Lift") (trTm f : map trTm args)) : trFSMExecBody xs
+trFSMExecBody _ = error "invalid case"
+
+-- TODO add a specific case for functions with a directive "run"
+-- directives action and init will be handled by the global FSM created
 trFunc :: Func -> IFunc
+trFunc f@Func {funcDirective = Just (Directive (DFSM resTy stTy) (DRun {directiveReturns = (rty, rvar), directiveWith, directiveStTrans = (stIn, stOut)}))} =
+  let newName = funcName f ++ "\'"
+      iStOut = case rvar of
+        Nothing -> ITmFuncCall (ITmVar "const") [trTm stOut]
+        Just v -> ITmLam [ITmVar v] (trTm stOut)
+      (b, w) = if (funcEff f == Just IO) then trIOBody (funcBody f) f {funcName = newName} else trBody (funcBody f) f {funcName = newName}
+      f' =
+        IFunc
+          { iFuncName = newName,
+            iFuncRetTy = ITyCustom (myShowTy resTy) [ITmTy $ trTy (funcRetTy f), trTm stIn, iStOut],
+            iFuncArgs = map trAnnParam (funcArgs f),
+            iFuncBody = [(ITmVar newName, b)],
+            iWhere = w
+          }
+      -- todo add support for arguments
+      outerLHS = ITmFuncCall (ITmVar $ funcName f) []
+      outerRHS = mkFSMExecOuter newName directiveWith resTy
+   in IFunc
+        { iFuncName = funcName f,
+          iFuncArgs = map trAnnParam (funcArgs f),
+          iFuncBody = [(outerLHS, outerRHS)],
+          iFuncRetTy = trTy $ funcRetTy f,
+          iWhere = [ITmFunc f']
+        }
 trFunc f@Func {funcName, funcRetTy, funcArgs, funcBody, funcEff = Just IO, funcDirective} =
   let (b, w) = trIOBody funcBody f
       iFuncArgs = map trAnnParam funcArgs
@@ -209,10 +274,6 @@ trIOBody x f =
    in case x of
         StBlock ls -> (Data.Bifunctor.first ITmDo) $ trListIOStmt ls argMap args f []
         _ -> (Data.Bifunctor.first ITmDo) $ trListIOStmt [x] argMap args f []
-
-mkUpper :: PTm -> PTm
-mkUpper (PTmVar x) = PTmVar (mkICon x)
-mkUpper x = x
 
 -- for functions with an IO effect
 --            stmt list   argmap              arglist               og func  where block  (func, where block)
@@ -328,6 +389,8 @@ trAction name resource (Action {actionName, actionRetTy = (AnnParam (rty, rvar) 
         actionBody
       )
 
+-- TODO better names for the default constructors
+
 -- run resource (action >>= cont) = do
 --    res <- run resource action
 --    run store (cont res)
@@ -424,7 +487,7 @@ trFSM :: FSM -> IFSM
 trFSM FSM {resourceTy, resource, stateTy, initCons, actions} =
   let idxmName = "idxm" ++ myShowTy (getAnnParamPTy resource) -- todo ++ read resourcety
       confuncs = map (trAction idxmName resource) actions
-      iStateTy = trTy stateTy 
+      iStateTy = trTy stateTy
       idxm =
         ITyDecl
           { iTyDeclName = idxmName,
@@ -433,13 +496,11 @@ trFSM FSM {resourceTy, resource, stateTy, initCons, actions} =
           }
       conc = trAnnParam resource
       run = mkRun conc idxm
-      addRun f = f {funcRun = Just $ iFuncName run}
    in IFSM
         { idxm = idxm {iTyDeclConstructors = iTyDeclConstructors idxm ++ map (\f -> f idxmName) [mkConPure, mkConBind, mkConLift]},
           conc,
           funcs = map (trFunc . addRun . actionFunc) actions ++ map trFunc initCons,
-          run,
-          iexec = (trFunc . addRun) exec
+          run
         }
 
 -- -----------------------------
@@ -522,7 +583,7 @@ defInner condition body fname retty tl ps e =
           funcRetTy = retty,
           funcBody = if e then ebdy else bdy,
           funcEff = Nothing,
-          funcRun = Nothing
+          funcDirective = Nothing
         }
 
 dontDoTheseTypes :: [ITy]

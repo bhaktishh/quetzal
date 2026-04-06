@@ -32,6 +32,7 @@ data PTy
 
 data PTm
   = PTmNat Nat
+  | PTmThis
   | PTmDotRec PTm PTm -- a.b = b field of record a
   | PTmDot PTm PTm (List PTm) -- a.f() ---> let a = f a ; x = a.f(b, c) ---> let (x, a) = f a b c
   | PTmPlus PTm PTm
@@ -158,15 +159,6 @@ data FSM = FSM
     actions :: List Action
   }
   deriving (Show, Eq)
-
--- data FSMExec = FSMExec
---   { resourceTyExec :: PTy,
---     stateTyExec :: PTy,
---     execRes :: AnnParam,
---     initFuncCall :: PTm,
---     execFunc :: Func,
---     execSt :: (PTm, PTm)
---   }
 
 data DirectiveSub = DFSM PTy PTy deriving (Show, Eq, Ord) -- FSM(Store, Access) = DFSM Store Access
 
