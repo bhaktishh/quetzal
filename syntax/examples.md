@@ -154,20 +154,20 @@ The parts we talked about ideally improving were: the FSM signature, including w
 
 ### minimal FSM 
 
-this is a bit nonsensical but just shows each part of the FSM. 
-
 ``` 
-impl FSM {
-    resource = String s; 
-    stateTy = Bool; 
 
-    action len returns Nat n [True --> (n > 10) ? True : False];
-    func len() returns Nat {
-        return length(s);
-    }
-} with init func initStr(String s) {
+#action FSM(String, Bool) returns Nat n [True --> (n > 10) ? True : False]
+func len() returns Nat {
+    return length(s);
+}
+
+#init FSM(String, Bool)
+func initStr(String s) {
     return s; 
-} with exec [IO] func main(String s) [True] {
+} 
+
+#run FSM(String, Bool) with this = initStr("hi") [True]
+[IO] func main(String s) {
     Nat n = s.len();
     IO.print(n); 
 }
@@ -178,46 +178,59 @@ impl FSM {
 ### Data store FSM
 
 ```
-impl FSM {
-    resource = Store st;
-    stateTy = Access;
+type Access {
+    constructor LoggedIn; 
+    constructor LoggedOut; 
+}
 
-    action login returns LoginResult r [LoggedOut --> (r == OK) ? LoggedIn : LoggedOut];
-    [IO] func login() returns LoginResult {
-        IO.print("enter password");
-        String pw = IO.getLine();
-        if (pw == "password123") {
-            return OK;
-        } else {
-            return BadPassword;
-        }
-    }
+type LoginResult {
+    constructor OK;
+    constructor BadPassword;
+}
 
-    action logout [LoggedIn --> LoggedOut];
-    [IO] func logout() {
-        IO.print("logging out");
-    }
+record Store {
+    String secret;
+    String pub; 
+}
 
-    action readSecret returns String [LoggedIn];
-    [IO] func readSecret() returns String {
-        return st.secret;
+#action FSM(Store, Access) returns LoginResult r [LoggedOut --> (r == OK) ? LoggedIn : LoggedOut]
+[IO] func login() returns LoginResult {
+    IO.print("enter password");
+    String pw = IO.getLine();
+    if (pw == "password123") {
+        return OK;
+    } else {
+        return BadPassword;
     }
-} with init func initStore(String secret, String pub) returns Store {
-        return Store(secret, pub);
-    }
-  with exec [IO] func main() [LoggedOut] {
-    LoginResult res = st.login();
-    if (res == OK) {
-        String secret = st.readSecret(); 
+}
+
+#action FSM(Store, Access) [LoggedIn --> LoggedOut]
+[IO] func logout() {
+    IO.print("logging out");
+}
+
+#action FSM(Store, Access) returns String [LoggedIn]
+[IO] func readSecret() returns String {
+        return this.secret;
+}
+
+#init FSM(Store, Access)
+func mkStore(String secret, String pub) returns Store {
+    return Store(secret, pub);
+}
+
+#run FSM(Store, Access) with this = mkStore("secret", "pub") [LoggedOut]
+[IO] func main() {
+    LoginResult res = this.login();
+    eif (res == OK) {
+        String secret = this.readSecret(); 
         IO.print(secret);
-        st.logout();
+        this.logout();
     } else {
         IO.print("bad password");
     }
 }
 ```
-
-> one other solution here is to have the states defined inline in the FSM. so states = [LoggedIn, LoggedOut] or something along those lines. but i think it's a worse solution personally because it abstracts away the idea of the state having an explicit type even if it can be transformed easily. 
 
 ## Other thoughts
 

@@ -1,4 +1,4 @@
-<prog> := { <import> | <ty-decl> | <rec-decl> | <func> | <fsm> }
+<prog> := { <import> | <ty-decl> | <rec-decl> | <func> }
 
 <import> := "import" <module>
 <module> := <u-ident> { "." <u-ident> }
@@ -10,12 +10,13 @@
 <ty-params> := <ty-param> { "," <ty-param> }
 <ty-param> := <type> [ <l-ident> ]
 
-<func> := [ "[" <eff> "]" ] "func" <l-ident> "(" [ <type> <l-ident> { "," <type> <l-ident> } ] ")" [ "returns" <type> ] "{" <stmt> "}" 
+<directive-sub> := "FSM" "(" <type> "," <type ")"
 
-<fsm> := "impl" "FSM" "{" "resource" "=" <type> <l-ident> ";" "stateTy" "=" <type> ";" { <action> <func> }
-        "}" "with" "init" <func> "with" "exec" <func> 
+<directive> := "#action" <directive-sub> [ "returns" <ty-param> ] "[" <term> [ "--> <term> ] "]"
+            | "#init" <directive-sub> 
+            | "#run" <directive-sub> [ "returns" <ty-param> ] "with" "this" "=" <term> "[" <term> [ "-->" <term> "]" ]
 
-<action> := "action" <l-ident> [ "returns" <ty-param> ] "[" <term> [ "-->" <term> ] "]"
+<func> := [ <directive> ] [ "[" <eff> "]" ] "func" <l-ident> "(" [ <type> <l-ident> { "," <type> <l-ident> } ] ")" [ "returns" <type> ] "{" <stmt> "}" 
 
 <type> := "Nat" | "Bool" | "String" | "Char" | "()" | "Ty" 
         | "Func" "(" TODO "=>" <type> ")"
