@@ -7,6 +7,7 @@ import Parse
 import Text.Megaparsec (parse, runParser)
 import Unparse
 import System.Environment (getArgs)
+import qualified Data.Map as M
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
 -- is there a way i can add a list of variables and types to carry around? or should that be a second pass
@@ -32,13 +33,14 @@ processFile inpf outpf = do
   x <- readFile inpf   
   case parse pProg "" x of
     Left _ -> error "wtf"
-    Right tm -> writeIdris (map doFuncs tm) outpf 
+    Right (tm, kvs) -> do 
+      writeIdris (map (doFuncs kvs) tm) outpf 
 
-doFuncs :: ProgEl -> IProgEl
-doFuncs (PFunc f) = IIFunc $ trFunc f
-doFuncs (PDecl x) = IIDecl $ trDecl x
-doFuncs (PImport x) = IIImport x
-doFuncs (PFSM fsm) = IIFSM $ trFSM fsm 
+doFuncs :: M.Map DirectiveSub FSM -> ProgEl -> IProgEl
+doFuncs kvs (PFunc f) = IIFunc $ trFunc kvs f M.empty
+doFuncs _ (PDecl x) = IIDecl $ trDecl x
+doFuncs _ (PImport x) = IIImport x
+doFuncs _ (PFSM fsm) = IIFSM $ trFSM fsm
 
 writeIdris :: IProg -> String -> IO ()
 writeIdris p fpath = writeFile fpath (unparse p)

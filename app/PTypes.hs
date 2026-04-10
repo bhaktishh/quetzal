@@ -60,15 +60,21 @@ data PTm
   | PTmIf PTm PTm PTm
   deriving (Show, Eq, Ord)
 
+-- when we need to use some term as a variable binding
+-- only applies to certain typeformers, others should not be used for implicit variable binding
 myShowTm :: PTm -> String
 myShowTm (PTmNat x) = show x
+myShowTm PTmThis = "this"
+myShowTm (PTmString s) = s
 myShowTm (PTmVar s) = s
+myShowTm (PTmCon c []) = c 
 myShowTm PTmWildCard = "_"
+myShowTm (PTmPTy t) = myShowTy t 
 myShowTm x = show x
 
 myShowTy :: PTy -> String
 myShowTy (PTyPTm t) = myShowTm t
-myShowTy (PTyCustom {tyName, tyParams}) = tyName
+myShowTy (PTyCustom {tyName, tyParams = []}) = tyName
 myShowTy x = show x
 
 data Switch = Switch
@@ -147,7 +153,7 @@ data Action = Action
   { actionName :: String,
     actionRetTy :: (PTy, Maybe String),
     actionStTrans :: (PTm, PTm),
-    actionFunc :: Func
+    actionFuncName :: String
   }
   deriving (Show, Eq)
 

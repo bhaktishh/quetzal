@@ -13,12 +13,6 @@ record Store {
     String pub; 
 }
 
--- single line comment
-
-{-- this is a
-    multiline  
-    comment --} 
-
 #action FSM(Store, Access) returns LoginResult r [LoggedOut --> (r == OK) ? LoggedIn : LoggedOut]
 [IO] func login() returns LoginResult {
     IO.print("enter password");

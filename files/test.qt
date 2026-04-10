@@ -1,3 +1,9 @@
+-- single line comment
+
+{-- this is a
+    multiline  
+    comment --} 
+
 type ElevatorState() {
     constructor Open() of ElevatorState();
     constructor Closed() of ElevatorState();
@@ -51,6 +57,12 @@ func dodoor<DoorState ds>(Door(ds, i) d) of Door(ds2, i) {
 type Access() {
     constructor LoggedOut;
     constructor LoggedIn;
+}
+
+enum PaymentStatus {
+    NotEnoughMoney;
+    EnoughMoney; 
+    Refunding; 
 }
 
 type LoginResult {

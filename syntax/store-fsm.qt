@@ -42,11 +42,12 @@ func mkStore(String secret, String pub) returns Store {
 #run FSM(Store, Access) with this = mkStore("secret", "pub") [LoggedOut]
 [IO] func main() {
     LoginResult res = this.login();
-    eif (res == OK) {
+    eif (res == OK) { 
         String secret = this.readSecret(); 
         IO.print(secret);
         this.logout();
     } else {
+        
         IO.print("bad password");
     }
 }

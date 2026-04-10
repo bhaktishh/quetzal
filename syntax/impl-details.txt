@@ -1,0 +1,133 @@
+FSM
+
+PTypes.hs 
+```
+data Action = Action
+  { actionName :: String,
+    actionRetTy :: (PTy, Maybe String),
+    actionStTrans :: (PTm, PTm),
+    actionFunc :: Func
+  }
+
+data FSM = FSM
+  { resourceTy :: PTy,
+    resource :: AnnParam,
+    stateTy :: PTy,
+    initCons :: List Func,
+    actions :: List Action
+  }
+
+data DirectiveSub = DFSM PTy PTy -- FSM(Store, Access) = DFSM Store Access
+
+data DirectiveTy
+  = DAction
+      { directiveReturns :: (PTy, Maybe String), -- eg returns LoginResult r
+        directiveStTrans :: (PTm, PTm)
+      }
+  | DInit
+  | DRun
+      { directiveReturns :: (PTy, Maybe String),
+        directiveWith :: (String, PTm), -- eg with this = mkStore("secret", "pub")
+        directiveStTrans :: (PTm, PTm)
+      }
+
+data Directive = Directive DirectiveSub DirectiveTy
+```
+
+ITypes.hs 
+
+```
+data IFSM = IFSM
+  { idxm :: ITyDecl, -- actions
+    conc :: IAnnParam, -- concrete type associated so it can be passed around 
+    run :: IFunc -- monadic run function for constructors 
+  } 
+
+data ITmDo = ITmDoLet String (Maybe ITy) ITm
+            | ITmDoBind (List String) ITm -- (a,b..) <- tm
+            | ITmDoCase (List ITm) (List (List ITm, ITm))
+            | ITmDoPure ITm
+            | ITmDoIf ITm ITm ITm
+            | ITmDoIO ITm
+
+data IFunc = IFunc
+  { iFuncName :: String,
+    iFuncArgs :: List IAnnParam,
+    iFuncBody :: List (ITm, ITm),
+    iFuncRetTy :: ITy,
+    iWhere :: List ITm
+  }
+```
+
+For the FSM construct, from PFSM to IFSM: 
+-- idxm: construct an indexed monad type with a constructor for each action specified. first letter of the action constructor is capitalised. needs the actions themselves. additionally, `bind`, `pure`, and `lift` constructors needed -- names should be unique in order to facilitate use with other FSMs. `
+-- conc: 
+
+-- currently: action funcs are created and returned as part of `IFSM`. ideally we want them returned simply as regular functions with the transformations applied. 
+
+Main.hs
+parse -> pToI -> unparse
+
+Parse.hs 
+> Full program gets parsed.
+> `Func` elements are passed to `mkFSMs`, where `action` and `init` directives are added to an `FSM` construct. In the case of the `run` directive, if the `DirectiveSub` does not exist in the collected map so far, it is inserted as an FSM with no initCons or actions. When the FSM is already in the map, the `action` and `init` directives simply update the right entry, and `run` does nothing. 
+> In `mkFSMs`, the first letter of the `actionName` is capitalised, for use as a constructor. 
+> FSMs created by `mkFSMs` are added to the final program as `ProgEl`s. This along with the map from `DirectiveSub` to `FSM` is returned to be used by `PToI.hs`. 
+
+PToI.hs
+> when translating functions in `trFunc`, we check for a directive
+> trFunc takes the FSM map, the original function, and a map of arguments, and returns an IFunc. 
+> in the case of FSM run functions, the output function is a wrapper that initialises the concrete resource and calls the monadic run function, which is defined in the `where` block of the wrapper function. 
+> the creation of the inner function is like the creation of a monadic block for IO, so they're abstracted into the same function
+
+
+-------------------
+-------------------
+trFSM
+-------------------
+
+-- must return 
+IFSM
+  { idxm :: ITyDecl, -- actions
+    conc :: ITy, -- concrete type associated so it can be passed around 
+    run :: IFunc -- monadic run function for constructors 
+  } 
+
+    -- first create idxm : ITyDecl
+    ITyDecl
+    { iTyDeclName :: String,
+        iTyDeclParams :: List IAnnParam,
+        iTyDeclConstructors :: List IConstructor
+    }
+
+    iTyDeclName = idxmName is of the form "Idxm<resourceTy>_<stateTy>"
+    iTyDeclParams = (t : ITy) -> iStateTy -> (ty -> iStateTy) ( -> ITy, which is implicit)
+    iTyDeclConstructors = make constructors for each action, then add pure, lift, bind. 
+        > pure and constructors will be named in the form "Pure<resourceTy>_<stateTy>", "Lift<resourceTy>_<stateTy>" to ensure that they do not clash for different FSMs. 
+        > bind will always be defined as (>>=) (infix) to enable idris to utilise do notation
+
+    -- now create conc: the concrete resource type, so the elaboration can pass it into and return it from all action functions.
+    conc : ITy = trTy resourceTy
+
+    -- finally create run : IFunc 
+    IFunc { 
+        iFuncName :: String,
+        iFuncArgs :: List IAnnParam,
+        iFuncBody :: List (ITm, ITm),
+        iFuncRetTy :: ITy,
+        iWhere :: List ITm 
+    }
+
+    iFuncName = of the form "run<resourceTy>_<stateTy>"
+    iFuncArgs = [ resourceTy , (<idxmName> ty st1 st2) ]
+    iFuncRetTy = IO (t, resourceTy)
+    iWhere = [] 
+    iFuncBody = a list of LHS and RHS top level pattern match
+
+        > iFuncBody creates one case for each constructor in the type declaration, including pure run and bind
+            > for actions, the action constructor's first character is converted to lowercase to obtain the name of the concrete action function 
+
+--------------
+--------------
+
+

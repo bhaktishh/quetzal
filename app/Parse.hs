@@ -3,6 +3,7 @@
 
 module Parse where
 
+import Data.Char (toUpper)
 import Data.List (intercalate, intersperse)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
@@ -77,7 +78,7 @@ pSquare p = do
 tmParse :: String -> Prog
 tmParse str = case parse pProg "" str of
   Left _ -> undefined
-  Right tm -> tm
+  Right (tm, _) -> tm
 
 pTmString :: Parser PTm
 pTmString = do
@@ -98,137 +99,52 @@ pImport = do
   m <- pSpaces $ pUpperStr `sepBy` char '.'
   pure $ PImport (intercalate "." m)
 
-getFuncs :: Prog -> List Func 
+getFuncs :: Prog -> List Func
 getFuncs [] = []
 getFuncs (PFunc f : xs) = f : getFuncs xs
+getFuncs (_ : xs) = getFuncs xs
 
-pProg :: Parser Prog
+pProg :: Parser (Prog, M.Map DirectiveSub FSM)
 pProg = do
   prog <- many (pSpaces pProgEl) <* eof
   let kvs = foldr mkFSMs M.empty (getFuncs prog)
-  -- TODO should we store a map of some sort for easy identification of exec func data 
-  -- i dont think this will be necessary actually but will keep around to try later 
-  pure $ (PFSM <$> M.elems kvs) ++ prog
+  -- TODO should we store a map of some sort for easy identification of exec func data
+  -- i dont think this will be necessary actually but will keep around to try later
+  pure ((PFSM <$> M.elems kvs) ++ prog, kvs)
+
+fstUpper :: String -> String
+fstUpper [] = []
+fstUpper (x : xs) = toUpper x : xs
 
 -- add global FSM structures populated with init and action directive funcs
 mkFSMs :: Func -> M.Map DirectiveSub FSM -> M.Map DirectiveSub FSM
 mkFSMs f kvs = case funcDirective f of
   Nothing -> kvs
-  Just (Directive dSub@(DFSM res st) dTy) -> case M.lookup dSub kvs of
-    -- this fsm is not in the global directory 
-    Nothing ->
-      let fsmNew =
-            FSM
-              { resourceTy = res,
-                stateTy = st,
-                resource = mkAnnParam True (res, "this"),
-                initCons = [],
-                actions = []
-              }
-       in case dTy of
-            DAction {directiveReturns, directiveStTrans} ->
-              let actionNew =
-                    Action
-                      { actionName = funcName f,
-                        actionRetTy = directiveReturns,
-                        actionStTrans = directiveStTrans,
-                        actionFunc = f
-                      }
-               in M.insert dSub (fsmNew {actions = [actionNew]}) kvs
-            DInit -> M.insert dSub (fsmNew {initCons = [f]}) kvs
-            _ -> M.insert dSub fsmNew kvs
-    -- FSM already exists 
-    Just _ -> case dTy of
-      DAction {directiveReturns, directiveStTrans} ->
-        let actionNew =
-              Action
-                { actionName = funcName f,
-                  actionRetTy = directiveReturns,
-                  actionStTrans = directiveStTrans,
-                  actionFunc = f
-                }
-         in M.adjust (\fsm -> fsm {actions = actionNew : actions fsm}) dSub kvs
-      DInit -> M.adjust (\fsm -> fsm {initCons = f : initCons fsm}) dSub kvs
-      _ -> kvs
-
--- mkFSMs :: Prog -> (Prog, List FSM)
--- mkFSMs [] = []
--- mkFSMs (PFunc f : xs) =
-
--- pAction :: Parser Action
--- pAction = do
---   _ <- pSpaces $ string "action"
---   actionName <- pSpaces pLowerStr
---   ret <- try (pSpaces (string "returns") >> pSpaces pPTy) <|> pure PTyUnit
---   retVar <- try (Just <$> pSpaces pLowerStr) <|> pure Nothing
---   let actionRetTy = J
---   _ <- pSpaces $ char '['
---   stIn <- pSpaces pPTm
---   stOut <- try (pSpaces (string "-->") >> pSpaces pPTm) <|> pure stIn
---   let actionStTrans = (stIn, stOut)
---   _ <- pSpaces $ char ']'
---   _ <- pSpaces $ char ';'
---   actionFunc <- pSpaces pFunc
---   pure $
---     Action
---       { actionName,
---         actionRetTy,
---         actionStTrans,
---         actionFunc
---       }
-
--- pFSM :: Parser FSM
--- pFSM = do
---   _ <- pSpaces $ string "impl"
---   _ <- pSpaces $ string "FSM"
---   (resourceTy, stateTy) <- pSpaces $ pParens $ (,) <$> pSpaces pPTy <*> (char ',' >> pSpaces pPTy)
---   _ <- pSpaces $ char '{'
---   (ty, var) <- (,) <$> pSpaces pPTy <*> pSpaces pVar
---   let resource = mkAnnParam True (ty, var)
---   _ <- pSpaces $ char ';'
---   -- stateTy <- pSpaces (string "stateTy") >> pSpaces (char '=') >> pSpaces pUpperStr
---   -- _ <- pSpaces $ char ';'
---   -- initCons <- try $ many (pSpaces pFunc)
---   actions <- try $ many (pSpaces pAction)
---   _ <- pSpaces $ char '}'
---   _ <- pSpaces (string "with") >> pSpaces (string "init")
---   _ <- pSpaces $ char '{'
---   initCons <- many (pSpaces pFunc)
---   _ <- pSpaces $ char '}'
---   -- _ <- pSpaces $ string "exec"
---   -- exec <- pSpaces pFunc
---   pure $
---     FSM
---       { resource,
---         resourceTy,
---         stateTy,
---         initCons,
---         actions
---       }
-
--- pFSMExec :: Parser FSMExec
--- pFSMExec = do
---   _ <- pSpaces $ string "run"
---   _ <- pSpaces $ string "FSM"
---   (resourceTyExec, stateTyExec) <- pParens $ (,) <$> pSpaces pPTy <*> (pSpaces (char ',') >> pSpaces pPTy)
---   _ <- pSpaces $ char '{'
---   _ <- pSpaces $ string "init"
---   execRes <- mkAnnParam True <$> ((,) <$> pSpaces pPTy <*> pSpaces pLowerStr)
---   _ <- pSpaces $ char '='
---   initFuncCall <- pSpaces pFuncCall
---   _ <- pSpaces $ char ';'
---   _ <- pSpaces $ string "exec"
---   (execFunc, execSt) <- pExecFunc
---   _ <- pSpaces $ char '}'
---   pure $
---     FSMExec
---       { resourceTyExec,
---         stateTyExec,
---         execRes,
---         initFuncCall,
---         execFunc,
---         execSt
---       }
+  Just (Directive dSub@(DFSM res st) dTy) ->
+    let kvs = case M.lookup dSub kvs of
+          Nothing ->
+            let fsm =
+                  FSM
+                    { resourceTy = res,
+                      stateTy = st,
+                      resource = mkAnnParam True (res, "this"),
+                      initCons = [],
+                      actions = []
+                    }
+             in M.insert dSub fsm kvs
+          Just _ -> kvs
+     in case dTy of
+          DAction {directiveReturns, directiveStTrans} ->
+            let actionNew =
+                  Action
+                    { actionName = fstUpper $ funcName f,
+                      actionRetTy = directiveReturns,
+                      actionStTrans = directiveStTrans,
+                      actionFuncName = funcName f
+                    }
+             in M.adjust (\fsm -> fsm {actions = actionNew : actions fsm}) dSub kvs
+          DInit -> M.adjust (\fsm -> fsm {initCons = f : initCons fsm}) dSub kvs
+          _ -> kvs
 
 pEff :: Parser Eff
 pEff = do
@@ -236,32 +152,6 @@ pEff = do
   eff <- try (pSpaces (string "IO") >> pure IO)
   _ <- pSpaces $ char ']'
   pure eff
-
--- pExecFunc :: Parser (Func, (PTm, PTm))
--- pExecFunc = do
---   funcEff <- try (Just <$> pSpaces pEff) <|> pure Nothing
---   _ <- pSpaces $ string "func"
---   funcName <- pSpaces pLowerStr
---   impArgs <- try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> try (pSpaces (pAngles pFuncArgs)) <|> pure []
---   expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs)
---   let funcArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
---   funcRetTy <- try (pSpaces (string "returns") >> pSpaces pPTy) <|> pure PTyUnit
---   _ <- pSpaces $ char '['
---   stIn <- pSpaces pPTm
---   stOut <- try (pSpaces (string "-->") >> pSpaces pPTm) <|> pure stIn
---   let stTrans = (stIn, stOut)
---   _ <- pSpaces $ char ']'
---   funcBody <- pSpaces $ pCurlies (try pStmt <|> pure (StBlock []))
---   pure
---     ( Func
---         { funcName,
---           funcArgs,
---           funcRetTy,
---           funcBody,
---           funcEff
---         },
---       stTrans
---     )
 
 pDirectiveSub :: Parser DirectiveSub
 pDirectiveSub = do
@@ -279,7 +169,7 @@ pStTrans = do
 
 pDAction :: Parser Directive
 pDAction = do
-  _ <- pSpaces $ string "@action"
+  _ <- pSpaces $ string "#action"
   directiveSub <- pSpaces pDirectiveSub
   directiveReturns <- try ((,) <$> pSpaces pPTy <*> optional (pSpaces pLowerStr)) <|> pure (PTyUnit, Nothing)
   directiveStTrans <- pSpaces pStTrans
@@ -293,13 +183,13 @@ pDAction = do
 
 pDInit :: Parser Directive
 pDInit = do
-  _ <- pSpaces $ string "@init"
+  _ <- pSpaces $ string "#init"
   directiveSub <- pSpaces pDirectiveSub
   pure $ Directive directiveSub DInit
 
 pDRun :: Parser Directive
 pDRun = do
-  _ <- pSpaces $ string "@run"
+  _ <- pSpaces $ string "#run"
   directiveSub <- pSpaces pDirectiveSub
   directiveReturns <- try ((,) <$> pSpaces pPTy <*> optional (pSpaces pLowerStr)) <|> pure (PTyUnit, Nothing)
   directiveWith <- pSpaces (string "with") >> ((,) <$> pSpaces pLowerStr <*> pPTm)
@@ -740,7 +630,7 @@ pTmDotRec = do
 pTyHole :: Parser PTy
 pTyHole = pSpaces (char '?') >> pure PTyHole
 
-pPTmThis :: Parser PTm 
+pPTmThis :: Parser PTm
 pPTmThis = pSpaces (string "this") >> pure PTmThis
 
 pPTy :: Parser PTy

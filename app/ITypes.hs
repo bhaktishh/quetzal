@@ -115,10 +115,9 @@ data IImplCase = IImplCase
 data IImplCaseBody = Tm ITm | Nest (List IImplCase) deriving (Show, Eq)
 
 data IFSM = IFSM
-  { idxm :: ITyDecl,
-    conc :: IAnnParam,
-    funcs :: List IFunc,
-    run :: IFunc 
+  { idxm :: ITyDecl, -- actions
+    conc :: ITy, -- concrete type associated so it can be passed around 
+    run :: IFunc -- monadic run function for constructors 
   } deriving (Show, Eq)
 
 data ITmDo = ITmDoLet String (Maybe ITy) ITm
@@ -126,5 +125,5 @@ data ITmDo = ITmDoLet String (Maybe ITy) ITm
             | ITmDoCase (List ITm) (List (List ITm, ITm))
             | ITmDoPure ITm
             | ITmDoIf ITm ITm ITm
-            | ITmDoIO ITm 
+            | ITmDoIO ITm
              deriving (Show, Eq)
