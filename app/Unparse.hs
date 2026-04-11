@@ -40,12 +40,10 @@ uProg (x : xs) = case x of
     pure $ fsm ++ "\n\n" ++ pr 
 
 uFSM :: IFSM -> Indent String 
-uFSM IFSM {idxm, conc, funcs, run, iexec} = do 
+uFSM IFSM {idxm, conc, run} = do 
   sidxm <- uTyDecl idxm 
-  sfuncs <- mapM uFuncs funcs 
   srun <- uFuncs run 
-  sexec <- uFuncs iexec 
-  pure $ sidxm ++ "\n\n" ++ intercalate "\n\n" sfuncs ++ "\n\n" ++ srun ++ "\n\n" ++ sexec ++ "\n\n"
+  pure $ sidxm ++ "\n\n" ++ srun  ++ "\n\n"
 
 
 uTypes :: IDecl -> Indent String

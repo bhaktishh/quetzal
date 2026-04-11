@@ -2,6 +2,7 @@
 
 module PTypes where
 
+import qualified Data.Map as M
 import GHC.TypeLits (Nat)
 
 type List a = [a]
@@ -67,9 +68,9 @@ myShowTm (PTmNat x) = show x
 myShowTm PTmThis = "this"
 myShowTm (PTmString s) = s
 myShowTm (PTmVar s) = s
-myShowTm (PTmCon c []) = c 
+myShowTm (PTmCon c []) = c
 myShowTm PTmWildCard = "_"
-myShowTm (PTmPTy t) = myShowTy t 
+myShowTm (PTmPTy t) = myShowTy t
 myShowTm x = show x
 
 myShowTy :: PTy -> String
@@ -152,14 +153,12 @@ data AnnParam = AnnParam (PTy, String) Bool deriving (Show, Eq, Ord) -- explicit
 data Action = Action
   { actionName :: String,
     actionRetTy :: (PTy, Maybe String),
-    actionStTrans :: (PTm, PTm),
-    actionFuncName :: String
+    actionStTrans :: (PTm, PTm)
   }
   deriving (Show, Eq)
 
 data FSM = FSM
   { resourceTy :: PTy,
-    resource :: AnnParam,
     stateTy :: PTy,
     initCons :: List Func,
     actions :: List Action

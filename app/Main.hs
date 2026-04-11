@@ -1,13 +1,13 @@
 module Main where
 
+import qualified Data.Map as M
 import ITypes
 import PToI
 import PTypes
 import Parse
-import Text.Megaparsec (parse, runParser)
-import Unparse
 import System.Environment (getArgs)
-import qualified Data.Map as M
+import Text.Megaparsec (parse, parseTest, runParser)
+import Unparse
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
 -- is there a way i can add a list of variables and types to carry around? or should that be a second pass
@@ -21,20 +21,25 @@ import qualified Data.Map as M
 -- non parameterized types must include "<>"
 
 main :: IO ()
-main = do 
-  [inpf, outpf] <- getArgs 
-  processFile inpf outpf 
+main = do
+  [inpf, outpf] <- getArgs
+  prg <- processFile inpf outpf
+  pure ()
 
 -- -- parsing utils
 parseFromFile p file = runParser p file <$> readFile file
 
 processFile :: String -> String -> IO ()
 processFile inpf outpf = do
-  x <- readFile inpf   
+  x <- readFile inpf
   case parse pProg "" x of
     Left _ -> error "wtf"
-    Right (tm, kvs) -> do 
-      writeIdris (map (doFuncs kvs) tm) outpf 
+    Right prg' -> do
+      let kvs = foldr mkFSMs M.empty (getFuncs prg')
+          prg = (PFSM <$> M.elems kvs) ++ prg'
+      print prg
+
+-- writeIdris (map (doFuncs kvs) prg) outpf
 
 doFuncs :: M.Map DirectiveSub FSM -> ProgEl -> IProgEl
 doFuncs kvs (PFunc f) = IIFunc $ trFunc kvs f M.empty

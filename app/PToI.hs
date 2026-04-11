@@ -404,8 +404,8 @@ mkIFun (x : xs) = toLower x : xs
 
 -- given name of idxm, resource and action
 -- TODO translate IORefs
-trAction :: String -> AnnParam -> Action -> IConstructor
-trAction name resource (Action {actionName, actionRetTy = (rty, mrvar), actionStTrans, actionFuncName}) =
+trAction :: String -> Action -> IConstructor
+trAction name (Action {actionName, actionRetTy = (rty, mrvar), actionStTrans}) =
   let stIn = trTm (fst actionStTrans)
       stOut = maybe (ITmFuncCall (ITmVar "const") [trTm (snd actionStTrans)]) (\var -> ITmLam [ITmVar var] (trTm (snd actionStTrans))) mrvar
    in IConstructor
@@ -511,10 +511,10 @@ mkRun str concTy decl =
         }
 
 trFSM :: FSM -> IFSM
-trFSM FSM {resourceTy, resource, stateTy, initCons, actions} =
+trFSM FSM {resourceTy, stateTy, initCons, actions} =
   let showFSM = myShowTy resourceTy ++ "_" ++ myShowTy stateTy
       idxmName = "Idxm" ++ showFSM
-      confuncs = map (trAction idxmName resource) actions
+      confuncs = map (trAction idxmName) actions
       iStateTy = trTy stateTy
       idxm' =
         ITyDecl
