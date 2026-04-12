@@ -35,7 +35,7 @@ data PTm
   = PTmNat Nat
   | PTmThis
   | PTmDotRec PTm PTm -- a.b = b field of record a
-  | PTmDot PTm PTm (List PTm) -- a.f() ---> let a = f a ; x = a.f(b, c) ---> let (x, a) = f a b c
+  | PTmDot PTm PTm (List PTm) -- a.f() ---> let a = f a ; x = a.f(b, c) ---> (x, a) <- f a b c
   | PTmPlus PTm PTm
   | PTmPair PTm PTm
   | PTmString String
@@ -51,6 +51,7 @@ data PTm
   | PTmList PTy (List PTm)
   | PTmUnit
   | PTmNot PTm
+  | PTmIO
   | PTmPTy PTy
   | PTmVar String
   | PTmWildCard

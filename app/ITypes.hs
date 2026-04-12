@@ -9,7 +9,8 @@ data ITy
   | ITyUnit
   | ITyTy
   | ITyFunc (List (Maybe String, ITy))
-  | ITyCustom String (List ITm)
+  | ITyVar String
+  | ITyApp ITy (List ITm)
   | ITyList ITy
   | ITyPair ITy ITy 
   | ITyIO ITy

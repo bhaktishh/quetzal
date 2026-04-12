@@ -603,12 +603,12 @@ pPTyFunc = do
 
 pTmDot :: Parser PTm
 pTmDot = do
-  t1 <- (pSpaces (string "IO") >> pure Nothing) <|> Just <$> pSpaces pPTm0
+  t1 <- (pSpaces (string "IO") >> pure Nothing) <|> (pSpaces (string "this") >> pure (Just PTmThis)) <|> Just <$> pSpaces pPTm0
   _ <- char '.'
   PTmFuncCall f xs <- pSpaces pFuncCall
   case t1 of
     Just ty -> pure $ PTmDot ty f xs
-    Nothing -> pure $ PTmFuncCall f xs
+    Nothing -> pure $ PTmDot PTmIO f xs
 
 pTmDotRec :: Parser PTm
 pTmDotRec = do

@@ -39,13 +39,13 @@ processFile inpf outpf = do
           prg = (PFSM <$> M.elems kvs) ++ prg'
       print prg
 
--- writeIdris (map (doFuncs kvs) prg) outpf
+-- writeIdris (map doFuncs prg) outpf
 
-doFuncs :: M.Map DirectiveSub FSM -> ProgEl -> IProgEl
-doFuncs kvs (PFunc f) = IIFunc $ trFunc kvs f M.empty
-doFuncs _ (PDecl x) = IIDecl $ trDecl x
-doFuncs _ (PImport x) = IIImport x
-doFuncs _ (PFSM fsm) = IIFSM $ trFSM fsm
+doFuncs :: ProgEl -> IProgEl
+doFuncs (PFunc f) = IIFunc $ trFunc f M.empty
+doFuncs (PDecl x) = IIDecl $ trDecl x
+doFuncs (PImport x) = IIImport x
+doFuncs (PFSM fsm) = IIFSM $ trFSM fsm
 
 writeIdris :: IProg -> String -> IO ()
 writeIdris p fpath = writeFile fpath (unparse p)
