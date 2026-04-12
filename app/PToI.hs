@@ -226,7 +226,7 @@ mkFSMExecOuterBody f (initVar, initCall) str =
    in ITmDo
         [ ITmDoLet initVar Nothing (trTm initCall),
           -- todo change for ioref
-          ITmDoBind ["resVal", "resConc"] (ITmFuncCall (ITmVar runFunc) [ITmVar initVar, ITmVar f']),
+          ITmDoBind [ITmVar "resVal", ITmVar "resConc"] (ITmFuncCall (ITmVar runFunc) [ITmVar initVar, ITmVar f']),
           ITmDoPure resVal
         ]
 
@@ -249,9 +249,9 @@ trMonadListStmt mstr ctx (StDeclAssign mty lhs rhs : xs) w =
    in case rhs of
         PTmDot x f args ->
           let tm = case (mstr, x) of
-                (Nothing, PTmIO) -> ITmDoBind [lhs] (ITmFuncCall (trTm f) (map trTm args))
-                (Just "this", PTmThis) -> ITmDoBind [lhs, "this"] (ITmFuncCall (trTm f) (trTm x : map trTm args))
-                (Just str, PTmVar v) | str == v -> ITmDoBind [lhs, str] (ITmFuncCall (trTm f) (trTm x : map trTm args))
+                (Nothing, PTmIO) -> ITmDoBind [ITmVar lhs] (ITmFuncCall (trTm f) (map trTm args))
+                (Just "this", PTmThis) -> ITmDoBind [ITmVar lhs, ITmVar "this"] (ITmFuncCall (trTm f) (trTm x : map trTm args))
+                (Just str, PTmVar v) | str == v -> ITmDoBind [ITmVar lhs, ITmVar str] (ITmFuncCall (trTm f) (trTm x : map trTm args))
                 (_, _) -> error "incorrect use of dot notation"
            in (tm : rest, w ++ w')
         _ ->
@@ -264,9 +264,9 @@ trMonadListStmt mstr ctx (StAssign var tm : xs) w = case (M.lookup var ctx) of
      in case tm of
           PTmDot x f args ->
             let itm = case (mstr, x) of
-                  (Nothing, PTmIO) -> ITmDoBind [var] (ITmFuncCall (trTm f) (map trTm args))
-                  (Just "this", PTmThis) -> ITmDoBind [var, "this"] (ITmFuncCall (trTm f) (trTm x : map trTm args))
-                  (Just str, PTmVar v) | str == v -> ITmDoBind [var, str] (ITmFuncCall (trTm f) (trTm x : map trTm args))
+                  (Nothing, PTmIO) -> ITmDoBind [ITmVar var] (ITmFuncCall (trTm f) (map trTm args))
+                  (Just "this", PTmThis) -> ITmDoBind [ITmVar var, ITmVar "this"] (ITmFuncCall (trTm f) (trTm x : map trTm args))
+                  (Just str, PTmVar v) | str == v -> ITmDoBind [ITmVar var, ITmVar str] (ITmFuncCall (trTm f) (trTm x : map trTm args))
                   (_, _) -> error "incorrect use of dot notation"
              in (itm : rest, w ++ w')
           _ ->
@@ -274,7 +274,8 @@ trMonadListStmt mstr ctx (StAssign var tm : xs) w = case (M.lookup var ctx) of
              in (itm : rest, w ++ w')
 trMonadListStmt _ _ [StReturn tm] w = ([ITmDoPure (trTm tm)], w)
 trMonadListStmt mstr ctx (StDot x f args : xs) w =
-  let itm = ITmDoBind [ITmPair ITmWildCard x] (ITmFuncCall (trTm f) (trTm x : map trTm args))
+  let x' = trTm x
+      itm = ITmDoBind [ITmWildCard, x'] (ITmFuncCall (trTm f) (x' : map trTm args))
       (rest, w') = trMonadListStmt mstr ctx xs w
    in (itm : rest, w ++ w')
 
@@ -483,7 +484,7 @@ mkRunBind _ funcName resVar =
       cont = ITmVar "cont"
       run = ITmVar funcName
       resource = ITmVar resVar
-   in (ITmFuncCall run [resource, ITmBind action cont], ITmDo [ITmDoBind ["res"] (ITmFuncCall run [resource, action]), ITmDoIO (ITmFuncCall run [resource, ITmFuncCall cont [ITmVar "res"]])])
+   in (ITmFuncCall run [resource, ITmBind action cont], ITmDo [ITmDoBind [ITmVar "res"] (ITmFuncCall run [resource, action]), ITmDoIO (ITmFuncCall run [resource, ITmFuncCall cont [ITmVar "res"]])])
 
 -- run resource (Pure<fsmName> x) = pure x
 --         idxmName -> runFuncName -> resourceVar -> (LHS, RHS)

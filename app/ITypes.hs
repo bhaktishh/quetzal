@@ -122,7 +122,7 @@ data IFSM = IFSM
   } deriving (Show, Eq)
 
 data ITmDo = ITmDoLet String (Maybe ITy) ITm
-            | ITmDoBind (List String) ITm -- (a,b..) <- tm
+            | ITmDoBind (List ITm) ITm -- (a,b..) <- tm
             | ITmDoCase (List ITm) (List (List ITm, ITm))
             | ITmDoPure ITm
             | ITmDoIf ITm ITm ITm
