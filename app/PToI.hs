@@ -96,8 +96,9 @@ trFunc f@(Func {funcName, funcArgs, funcBody, funcRetTy, funcEff, funcDirective 
           str = myShowTy resTy ++ "_" ++ myShowTy stTy
           iFuncName = funcName ++ "\'"
           outerRHS = mkFSMExecOuterBody funcName directiveWith str
+          m' = M.insert (fst directiveWith) (ITyTm $ trTm (snd directiveWith)) m
           innerLHS = ITmFuncCall (ITmVar iFuncName) (map (ITmVar . getIAnnParamVar) args')
-          (db, w) = trMonadListStmt Nothing m [funcBody] []
+          (db, w) = trMonadListStmt Nothing m' [funcBody] []
           innerRHS = ITmDo db
           f' =
             IFunc
@@ -240,9 +241,14 @@ mkUpper x = x
 
 -- trMonadListStmt :: Maybe Directive -> List Stmt -> M.Map String PTy ->
 
+unblock :: Stmt -> List Stmt
+unblock (StBlock s) = s
+unblock x = [x]
+
 -- Maybe String : if Nothing then IO monad, if something then var to update under Some
 trMonadListStmt :: Maybe String -> M.Map String ITy -> List Stmt -> List ITm -> (List ITmDo, List ITm)
-trMonadListStmt mstr ctx (StBlock _ : _) w = error "no TL block inside block allowed"
+trMonadListStmt _ _ [] w = ([], w)
+trMonadListStmt _ _ (StBlock _ : _) w = error "no TL block inside block allowed"
 trMonadListStmt mstr ctx (StDeclAssign mty lhs rhs : xs) w =
   let imty = trTy <$> mty
       (rest, w') = trMonadListStmt Nothing (M.insert lhs (fromMaybe ITyHole imty) ctx) xs w
@@ -278,19 +284,25 @@ trMonadListStmt mstr ctx (StDot x f args : xs) w =
       itm = ITmDoBind [ITmWildCard, x'] (ITmFuncCall (trTm f) (x' : map trTm args))
       (rest, w') = trMonadListStmt mstr ctx xs w
    in (itm : rest, w ++ w')
+trMonadListStmt mstr ctx (StIODot f args : xs) w =
+  let itm = ITmDoBind [ITmWildCard] (ITmFuncCall (trTm f) (map trTm args))
+      (rest, w') = trMonadListStmt mstr ctx xs w
+   in (itm : rest, w ++ w')
+trMonadListStmt mstr ctx (StIf c t e : xs) w =
+  let (t', wt) = trMonadListStmt mstr ctx (unblock t ++ xs) w
+      (e', we) = trMonadListStmt mstr ctx (unblock t ++ xs) w
+   in ([ITmDoIf (trTm c) (ITmDo (t')) (ITmDo e')], wt ++ we)
+trMonadListStmt mstr ctx (StEIf c t e : xs) w =
+  let (t', wt) = trMonadListStmt mstr ctx (unblock t ++ xs) w
+      (e', we) = trMonadListStmt mstr ctx (unblock e ++ xs) w
+      itm = convIOIf (trTm c) (ITmDo t') (ITmDo e')
+   in ([itm], wt ++ we)
+trMonadListStmt mstr ctx (StSwitch (Switch switchOn cases defaultCase) : xs) w = undefined
+trMonadListStmt mstr ctx (StWhile condition body : xs) w = undefined
+trMonadListStmt mstr ctx (StEWhile condition body : xs) w = undefined
+trMonadListStmt mstr ctx (StSkip : xs) w = trMonadListStmt mstr ctx xs w
+trMonadListStmt _ _ (StReturn _ : _) _ = error "return must be last statement in block"
 
--- trMonadListStmt _ _ [] w = ([], w)
--- trMonadListStmt b m [StReturn tm] w = ([ITmDoPure (trTm tm)], [])
--- trMonadListStmt b m (StDeclAssign mty lhs rhs : xs) w = case rhs of
---   PTmDot PTmThis f args -> ITmDoBind [lhs] (ITmFuncCall (trTm $ mkUpper f) (map trTm args)) : trMonadListStmt xs
---   _ -> ITmDoLet lhs (trTy <$> mty) (trTm rhs) : trMonadListStmt xs
--- trMonadListStmt b m (StAssign lhs rhs : xs) w = case rhs of
---   PTmDot PTmThis f args -> ITmDoBind [lhs] (ITmFuncCall (trTm $ mkUpper f) (map trTm args)) : trMonadListStmt xs
---   _ -> ITmDoLet lhs Nothing (trTm rhs) : trMonadListStmt xs
--- trMonadListStmt b m (StIf c t e : xs) w = undefined
--- trMonadListStmt b m (StEIf c t e : xs) w = undefined
--- -- todo check nesting
--- trMonadListStmt b m (StBlock stmts : xs) w = trMonadListStmt stmts ++ trMonadListStmt xs
 -- trMonadListStmt b m (StSwitch sw : xs) w = undefined
 -- trMonadListStmt b m (StSkip : xs) = trMonadListStmt xs
 -- trMonadListStmt b m (StDot PTmThis f args : xs) = ITmDoBind ["_"] (ITmFuncCall (trTm $ mkUpper f) (map trTm args)) : trMonadListStmt b xs
