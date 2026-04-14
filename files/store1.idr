@@ -62,8 +62,8 @@ main' = do
             _ <- Lift $ putStr "bad password"
             Pure () 
             
-main : IO ()
+main : IO t
 main = do 
-    let st = initStore
-    (_, store) <- run st main
-    pure ()
+    let this = initStore 
+    (t, thisConc) <- run st main
+    pure t
