@@ -4,9 +4,9 @@ module Unparse where
 
 import Control.Monad.State.Lazy
 import Data.List (intercalate)
+import Data.Maybe (fromMaybe)
 import ITypes
 import PToI (deriveDecEq)
-import Data.Maybe (fromMaybe)
 
 type Indent a = State (Int, Bool) a
 
@@ -34,17 +34,17 @@ uProg (x : xs) = case x of
   IIImport m -> do
     pr <- uProg xs
     pure $ "import " ++ m ++ "\n\n" ++ pr
-  IIFSM fsm -> do -- TODO 
-    fsm <- uFSM fsm 
-    pr <- uProg xs 
-    pure $ fsm ++ "\n\n" ++ pr 
+  IIFSM fsm -> do
+    -- TODO
+    fsm <- uFSM fsm
+    pr <- uProg xs
+    pure $ fsm ++ "\n\n" ++ pr
 
-uFSM :: IFSM -> Indent String 
-uFSM IFSM {idxm, conc, run} = do 
-  sidxm <- uTyDecl idxm 
-  srun <- uFuncs run 
-  pure $ sidxm ++ "\n\n" ++ srun  ++ "\n\n"
-
+uFSM :: IFSM -> Indent String
+uFSM IFSM {idxm, conc, run} = do
+  sidxm <- uTyDecl idxm
+  srun <- uFuncs run
+  pure $ sidxm ++ "\n\n" ++ srun ++ "\n\n"
 
 uTypes :: IDecl -> Indent String
 uTypes (ITy tdecl) = uTyDecl tdecl
@@ -122,10 +122,11 @@ uTy ITyNat = pure "Nat"
 uTy ITyBool = pure "Bool"
 uTy ITyTy = pure "Type"
 uTy ITyUnit = pure "()"
-uTy (ITyCustom name params) = do
+uTy (ITyApp name params) = do
   (ind, t) <- get
   put (ind, False)
   params <- mapM uTm params
+  name <- uTy name
   put (ind, t)
   pure $ name ++ " " ++ unwords params
 uTy (ITyFunc args) = do
@@ -145,6 +146,10 @@ uTy (ITyIO ty) = do
   put (ind, False)
   ty' <- uTy ty
   pure $ indent t ind ++ "IO " ++ ty'
+uTy (ITyVar v) = do
+  (ind, t) <- get
+  put (ind, False)
+  pure $ indent t ind ++ v
 
 uFuncArg :: (Maybe String, ITy) -> Indent String
 uFuncArg (Nothing, ty) = uTy ty
@@ -159,13 +164,13 @@ uTm (ITmString s) = do
   (ind, t) <- get
   put (ind, False)
   pure $ indent t ind ++ "\"" ++ s ++ "\""
-uTm (ITmDot a b) = do 
-  (ind, t) <- get 
+uTm (ITmDot a b) = do
+  (ind, t) <- get
   put (ind, False)
   a' <- uTm a
   b' <- uTm b
   put (ind, t)
-  pure $ indent t ind ++ a' ++ "." ++ b' 
+  pure $ indent t ind ++ a' ++ "." ++ b'
 uTm ITmWildCard = do
   (ind, t) <- get
   put (ind, False)
@@ -350,28 +355,29 @@ uTm (ITmBind t1 t2) = do
   t1' <- uTm t1
   t2' <- uTm t2
   pure $ indent t ind ++ putParens t1' ++ " >>= " ++ putParens t2'
-uTm (ITmDo d) = do 
-  (ind, t) <- get 
+uTm (ITmDo d) = do
+  (ind, t) <- get
   put (ind + 1, True)
-  dos <- mapM uTmDo d 
+  dos <- mapM uTmDo d
   put (ind, t)
-  pure $ indent t ind ++ "do \n" ++ intercalate "\n" dos 
+  pure $ indent t ind ++ "do \n" ++ intercalate "\n" dos
 
-uTmDo :: ITmDo -> Indent String 
-uTmDo (ITmDoLet v ty x) = do 
+uTmDo :: ITmDo -> Indent String
+uTmDo (ITmDoLet v ty x) = do
   (ind, t) <- get
   put (ind, False)
   ty <- uTy (fromMaybe ITyHole ty)
   tm <- uTm x
   put (ind, t)
   pure $ indent t ind ++ "let " ++ v ++ " : " ++ ty ++ " = " ++ tm
-uTmDo (ITmDoBind xs x) = do 
-  (ind, t) <- get 
+uTmDo (ITmDoBind xs x) = do
+  (ind, t) <- get
   put (ind, False)
   tm <- uTm x
+  xs' <- mapM uTm xs
   put (ind, t)
-  pure $ indent t ind ++ putParens (intercalate "," xs) ++ " <- " ++ tm 
-uTmDo (ITmDoCase ons branches) = do 
+  pure $ indent t ind ++ putParens (intercalate "," xs') ++ " <- " ++ tm
+uTmDo (ITmDoCase ons branches) = do
   (ind, t) <- get
   put (ind, False)
   on <- mapM uTm ons
@@ -385,7 +391,8 @@ uTmDo (ITmDoCase ons branches) = do
           put (ind, False)
           v <- uTm v
           pure (xs, v)
-      ) branches 
+      )
+      branches
   put (ind, t)
   pure $
     indent t ind
@@ -399,24 +406,24 @@ uTmDo (ITmDoCase ons branches) = do
         ("\n" ++ indent True (ind + 1))
         (map (\(xs, tm) -> "(" ++ intercalate "," xs ++ ")" ++ " => " ++ tm) cases)
       ++ ")"
-uTmDo (ITmDoPure tm) = do 
-  (ind, t) <- get 
-  put (ind, False)
-  tm' <- uTm tm 
-  put (ind, t)
-  pure $ indent t ind ++ "pure " ++ tm'
-uTmDo (ITmDoIf c t e) = do 
-  (ind, b) <- get
-  put (ind, False)
-  c' <- uTm c 
-  t' <- uTm t 
-  e' <- uTm e 
-  put (ind, b)
-  pure $ indent b ind ++ "if " ++ putParens c' ++ " then " ++ putParens t' ++ " else " ++ putParens e' 
-uTmDo (ITmDoIO tm) = do 
+uTmDo (ITmDoPure tm) = do
   (ind, t) <- get
   put (ind, False)
-  tm' <- uTm tm 
+  tm' <- uTm tm
+  put (ind, t)
+  pure $ indent t ind ++ "pure " ++ tm'
+uTmDo (ITmDoIf c t e) = do
+  (ind, b) <- get
+  put (ind, False)
+  c' <- uTm c
+  t' <- uTm t
+  e' <- uTm e
+  put (ind, b)
+  pure $ indent b ind ++ "if " ++ putParens c' ++ " then " ++ putParens t' ++ " else " ++ putParens e'
+uTmDo (ITmDoIO tm) = do
+  (ind, t) <- get
+  put (ind, False)
+  tm' <- uTm tm
   put (ind, t)
   pure $ indent t ind ++ tm'
 
