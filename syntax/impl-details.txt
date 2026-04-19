@@ -198,11 +198,13 @@ IFunc
 --------------
 trMonadListStmt 
 ---------------
-trMonadListStmt :: Maybe String -> M.Map String PTy -> List Stmt -> List ITmDo
+trMonadListStmt :: Func -> Maybe String -> M.Map String PTy -> List Stmt -> List ITm
 takes in: 
+    - Func : the outer func 
     - Maybe String: if Nothing, the monad is the IO monad; if Just str, this is the fsm variable name (eg "this" but not necessary)
     - M.Map String PTy: a map from variable names to types of vars in context 
     - List Stmt: the actual body to transform 
+    - List ITm : where block 
 returns: 
     - (List ITmDo, List ITm)
     where List ITmDo = transformed body in do notation
@@ -227,10 +229,17 @@ case match on
       { condition :: PTm,
         body :: Stmt
       }
+    > construct recursive helper function to put in while block:
+        > helper function for while loop in `f` is named funcName f ++ "_rec" ++ <length of existing where block> 
+        > helper function args are the args of the outer function + any variables defined locally in the function 
+        > return type same as outer function 
+        > body of form if (condition) { body ; <recursive call> } else { tail }
+
   | StEWhile
       { condition :: PTm,
         body :: Stmt
       }
+      > same as while, except the body is transformed using convIOIf 
 
   | StReturn PTm
   > can only be last statement in block
@@ -245,7 +254,11 @@ case match on
   > no block inside block: only in specific constructs
 
   | StSwitch Switch
-  
+  > for each case, generate correct number of args to match on (wildcards if not specified)
+  > append rest of stmts to each branch
+  > each branch under a do block 
+  > collect and concat where block
+
   | StSkip
   > do rest 
 

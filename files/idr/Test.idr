@@ -1,245 +1,206 @@
-import Decidable.Equality
-import Data.List 
+import Data.IORef 
 
-head : (x : List a) -> {_ : (x = []) -> Void} -> a
-head x = index 0 x 
+data Access = LoggedOut | LoggedIn 
 
-data DoorState : Type where 
-	Open : DoorState 
-	Closed : DoorState 
+data LoginResult = OK | BadPassword 
 
+data Store : (ty : Type) -> Access -> (ty -> Access) -> Type where
+  Login : Store LoginResult LoggedOut (\res => case res of
+      OK => LoggedIn
+      BadPassword => LoggedOut)
+  Logout : Store () LoggedIn (const LoggedOut)
+  ReadSecret : Store String LoggedIn (const LoggedIn)
+  Pure : (x : ty) -> Store ty (st x) st
+  Lift : IO ty -> Store ty st (const st)
+  (>>=) : Store a st1 st2 -> ((x : a) -> Store b (st2 x) st3) -> Store b st1 st3
 
-DecEq ((DoorState)) where 
-	decEq (Open) (Open) = (Yes Refl)
-	decEq (Open) (Closed) = (No (\h => (case (h) of ((Refl)) impossible)))
-	decEq (Closed) (Open) = (No (\h => (case (h) of ((Refl)) impossible)))
-	decEq (Closed) (Closed) = (Yes Refl)
+record DStore where
+    constructor MkDStore
+    secret : String 
+    pub : String
 
-data Door : (ds : DoorState ) -> (i : Nat) -> Type where 
-	MkDoor : (ds : DoorState ) -> (i : Nat) -> Door ds i
+initStore : DStore 
+initStore = MkDStore { secret="secret data :O\n", pub="public data\n" }
 
+login : DStore -> IO (LoginResult, DStore)
+login store = do
+  putStr "enter password: "
+  pw <- getLine
+  if pw == "password123"
+    then do
+      pure (OK, store)
+    else do
+      pure (BadPassword, store)
 
-{ds : DoorState } -> {i : Nat} -> DecEq ((Door ds i)) where 
-	decEq (MkDoor ds i) (MkDoor ds i) = (Yes Refl)
+logout : DStore -> IO ((), DStore)
+logout store = do 
+    putStrLn "logging out"
+    pure ((), store)
 
-openDoor : (d : Door (Closed) i) -> Door (Open) i
-openDoor d = 
-	(MkDoor (Open) i)
+readSecret : DStore -> IO (String, DStore)
+readSecret store = pure (store.secret, store)
 
-closeDoor : (d : Door (Open) i) -> Door (Closed) i
-closeDoor d = 
-	(MkDoor (Closed) i)
+run : DStore -> Store t st1 st2 -> IO (t, DStore)
+run store Login = login store 
+run store Logout = logout store 
+run store ReadSecret = readSecret store 
+run store (Pure x) = pure (x, store)
+run store (Lift io) = (,) <$> io <*> pure store
+run store (action >>= cont) = do 
+    (res, store) <- run store action
+    run store (cont res)
 
-dodoor : {ds : DoorState } -> (d : Door ds i) -> Door ds2 i
-dodoor d = 
-	(case ((decEq ds Open)) of
-		((No noprf)) => (openDoor d)
-		((Yes yesprf)) => (closeDoor d))
+main' : Store () LoggedOut (const LoggedOut)
+main' = do
+    res <- Login
+    case res of 
+        OK => ?h
+		--  do 
+        --     secret <- ReadSecret
+        --     _ <- Lift $ putStr secret 
+        --     Logout
+        BadPassword => do
+			?h2 
+            -- _ <- Lift $ putStr "bad password"
+            -- Pure () 
+            
+main : IO ()
+main = do 
+    let this = initStore 
+    (t, thisConc) <- run this main'
+    pure t
 
-
--- import Data.Vect
--- data MyCurse : (a : Type) -> (b : (x : a) -> Type) -> (p : (x : a) -> (y : (b x)) -> Type) -> Type where 
--- 	MkMyCurse : {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (x : a) -> (y : (b x)) -> (pf : (p x y)) -> MyCurse a b p
-
-
--- {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> ((DecEq a)) => ((x : a) -> (DecEq (b x))) => ((x : a) -> (y : (b x)) -> (DecEq (p x y))) => DecEq ((MyCurse a b p)) where 
--- 	decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) with (decEq x1 x2)
--- 		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | (Yes Refl)  with (decEq y1 y2)
--- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | (Yes Refl) | (Yes Refl)  with (decEq pf1 pf2)
--- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf1) | (Yes Refl) | (Yes Refl) | (Yes Refl)  = (Yes Refl)
--- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | (Yes Refl) | (Yes Refl) | (No prf)  = (No (\h => (prf (case (h) of
--- 					((Refl)) => (Refl)))))
--- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | (Yes Refl) | (No prf)  = (No (\h => (prf (case (h) of
--- 				((Refl)) => (Refl)))))
--- 		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) | (No prf)  = (No (\h => (prf (case (h) of
--- 			((Refl)) => (Refl)))))
-
--- search : (n : Nat) -> (ls : Vect n (Nat)) -> (x : Nat) -> Maybe (Fin n)
--- search n ls x = 
--- 	let i : Nat = 0 in
--- 		let ret : Maybe (Fin n) = (Nothing) in
--- 			(search_rec0 n ls x i ret)
--- where 
--- 	search_rec0 : (n : Nat) -> (ls : Vect n (Nat)) -> (x : Nat) -> (i : Nat) -> (ret : Maybe (Fin n)) -> Maybe (Fin n)
--- 	search_rec0 n ls x i ret = 
--- 		(case ((isLT i n)) of
--- 			((No noprf)) => ret
--- 			((Yes yesprf)) => (case ((decEq (index (natToFinLT i) ls) x)) of
--- 				((No noprf)) => let i : Nat = (S i) in
--- 					(search_rec0 n ls x i ret)
--- 				((Yes yesprf)) => let ret : Maybe (Fin n) = (Just (natToFinLT i)) in
--- 					let i : Nat = (S i) in
--- 						(search_rec0 n ls x i ret)))
 
 -- import Decidable.Equality
+-- import Data.List 
 
--- data Test3 : (n : Nat) -> (t : Type) -> Type where 
--- 	CTest3 : (n : Nat) -> (x : t) -> (xs : Test3 n t) -> Test3 (S n) t
+-- head : (x : List a) -> {_ : (x = []) -> Void} -> a
+-- head x = index 0 x 
 
-
--- {n : Nat} -> {t : Type} -> ((DecEq t)) => DecEq ((Test3 n t)) where 
--- 	decEq ((CTest3 n x1 xs1)) ((CTest3 n x2 xs2)) with (decEq x1 x2)
--- 		decEq ((CTest3 n x1 xs1)) ((CTest3 n x1 xs2)) | (Yes Refl)  with (decEq xs1 xs2)
--- 			decEq ((CTest3 n x1 xs1)) ((CTest3 n x1 xs1)) | (Yes Refl) | (Yes Refl)  = (Yes Refl)
--- 			decEq ((CTest3 n x1 xs1)) ((CTest3 n x1 xs2)) | (Yes Refl) | (No prf)  = (No (\h => (prf (case (h) of
--- 				((Refl)) => (Refl)))))
--- 		decEq ((CTest3 n x1 xs1)) ((CTest3 n x2 xs2)) | (No prf)  = (No (\h => (prf (case (h) of
--- 			((Refl)) => (Refl)))))
+-- data DoorState : Type where 
+-- 	Open : DoorState 
+-- 	Closed : DoorState 
 
 
+-- DecEq ((DoorState)) where 
+-- 	decEq (Open) (Open) = (Yes Refl)
+-- 	decEq (Open) (Closed) = (No (\h => (case (h) of ((Refl)) impossible)))
+-- 	decEq (Closed) (Open) = (No (\h => (case (h) of ((Refl)) impossible)))
+-- 	decEq (Closed) (Closed) = (Yes Refl)
+
+-- data Door : (ds : DoorState ) -> (i : Nat) -> Type where 
+-- 	MkDoor : (ds : DoorState ) -> (i : Nat) -> Door ds i
 
 
--- data BadExample : (n : Nat) -> (t : Type) -> Type where 
--- 	BadConstructor : (head : t) -> (n : Nat) -> BadExample n t
+-- {ds : DoorState } -> {i : Nat} -> DecEq ((Door ds i)) where 
+-- 	decEq (MkDoor ds i) (MkDoor ds i) = (Yes Refl)
 
--- {n : Nat} -> {t : Type} -> DecEq t => DecEq (BadExample n t) where
--- 	decEq (BadConstructor head1 n1) (BadConstructor head2 n1) with (decEq head1 head2)
--- 		decEq (BadConstructor head1 n1) (BadConstructor head1 n2) | Yes Refl = Yes Refl
--- 		decEq (BadConstructor head1 n1) (BadConstructor head2 n2) | No prf  = No (\h => (prf (case (h) of
--- 				(Refl) => Refl)))
+-- openDoor : (d : Door (Closed) i) -> Door (Open) i
+-- openDoor d = 
+-- 	(MkDoor (Open) i)
 
--- data BEx2 : (t : Type) -> (n : Nat) -> Type where
--- 	BC2 : (n : Nat) -> (head : t) -> BEx2 t n 
+-- closeDoor : (d : Door (Open) i) -> Door (Closed) i
+-- closeDoor d = 
+-- 	(MkDoor (Closed) i)
 
--- {t : Type} -> {n : Nat} -> DecEq t => DecEq (BEx2 t n) where
--- 	decEq (BC2 n1 head1) (BC2 n1 head2) with (decEq head1 head2)
--- 		decEq (BC2 n1 head1) (BC2 n1 head1) | Yes Refl = Yes Refl
--- 		decEq (BC2 n1 head1) (BC2 n1 head2) | No prf  = No (\h => (prf (case (h) of
--- 				(Refl) => Refl)))
-
--- data BEx3 : (t : Type) -> Type where
--- 	BC3 : (x : t) -> BEx3 t
-
--- {t : Type} -> DecEq t => DecEq (BEx3 t) where
--- 	decEq (BC3 x1) (BC3 x2) with (decEq x1 x2)
--- 		decEq (BC3 x1) (BC3 x1) | Yes Refl = Yes Refl 
--- 		decEq (BC3 x1) (BC3 x2) | No prf = No (\h => prf (case h of Refl => Refl))
-
--- -- data Test1 : (y : Type) -> (s : y) -> Type where 
--- -- 	C1 : (s : y) -> Test1 y s
-
--- -- {y : Type} -> {s : y} -> {t : Type} -> (DecEq t) => DecEq (Test1 y s) where 
--- -- 	decEq (C1 s1) (C1 s2) with (decEq s1 s2)
--- -- 		decEq (C1 s1) (C1 s1) | Yes Refl  = Yes Refl
--- -- 		decEq (C1 s1) (C1 s2) | No prf  = No (\h => (prf (case (h) of
--- -- 			(Refl) => Refl)))
-
-data Vect : (n : Nat) -> (t : Type) -> Type where 
-	Nil : Vect 0 t
-	Cons : (head : t) -> (tail : Vect n t) -> Vect (S n) t
+-- dodoor : {ds : DoorState } -> (d : Door ds i) -> Door ds2 i
+-- dodoor d = 
+-- 	(case ((decEq ds Open)) of
+-- 		((No noprf)) => (openDoor d)
+-- 		((Yes yesprf)) => (closeDoor d))
 
 
-{n : Nat} -> {t : Type} -> (DecEq t) => DecEq (Vect n t) where 
-	decEq (Nil) (Nil) = Yes Refl
-	decEq (Cons head1 tail1) (Cons head2 tail2) with (decEq head1 head2)
-		decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl  with (decEq tail1 tail2)
-			decEq (Cons head1 tail1) (Cons head1 tail1) | Yes Refl | Yes Refl  = Yes Refl
-			decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
-				(Refl) => Refl)))
-		decEq (Cons head1 tail1) (Cons head2 tail2) | No prf  = No (\h => (prf (case (h) of
-			(Refl) => Refl)))
-
--- data Test : (a : Type) -> (z : Type) -> (p : (z : Type) -> (a : x) -> Type) -> Type where 
--- 	MkTest : (x : a) -> (z : Type) -> (pf : (p z x)) -> Test a z p
+-- -- import Data.Vect
+-- -- data MyCurse : (a : Type) -> (b : (x : a) -> Type) -> (p : (x : a) -> (y : (b x)) -> Type) -> Type where 
+-- -- 	MkMyCurse : {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (x : a) -> (y : (b x)) -> (pf : (p x y)) -> MyCurse a b p
 
 
--- {a : Type} -> {z : Type} -> {p : (z : Type) -> (a : x) -> Type} -> (DecEq a, DecEq z, (z : Type) -> (a : x) -> DecEq (p z a)) => DecEq (Test a z p) where 
--- 	decEq (MkTest x1 z pf1) (MkTest x2 z pf2) with (decEq x1 x2)
--- 		decEq (MkTest x1 z pf1) (MkTest x1 z pf2) | Yes Refl  with (decEq pf1 pf2)
--- 			decEq (MkTest x1 z pf1) (MkTest x1 z pf1) | Yes Refl | Yes Refl  = Yes Refl
--- 			decEq (MkTest x1 z pf1) (MkTest x1 z pf2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- 				(Refl) => Refl)))
--- 		decEq (MkTest x1 z pf1) (MkTest x2 z pf2) | No prf  = No (\h => (prf (case (h) of
--- 			(Refl) => Refl)))
+-- -- {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> ((DecEq a)) => ((x : a) -> (DecEq (b x))) => ((x : a) -> (y : (b x)) -> (DecEq (p x y))) => DecEq ((MyCurse a b p)) where 
+-- -- 	decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) with (decEq x1 x2)
+-- -- 		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | (Yes Refl)  with (decEq y1 y2)
+-- -- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | (Yes Refl) | (Yes Refl)  with (decEq pf1 pf2)
+-- -- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf1) | (Yes Refl) | (Yes Refl) | (Yes Refl)  = (Yes Refl)
+-- -- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | (Yes Refl) | (Yes Refl) | (No prf)  = (No (\h => (prf (case (h) of
+-- -- 					((Refl)) => (Refl)))))
+-- -- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | (Yes Refl) | (No prf)  = (No (\h => (prf (case (h) of
+-- -- 				((Refl)) => (Refl)))))
+-- -- 		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) | (No prf)  = (No (\h => (prf (case (h) of
+-- -- 			((Refl)) => (Refl)))))
 
--- data MyPair : (a : Type) -> (p : (x : a) -> Type) -> Type where 
--- 	MkMyPair : (x : a) -> (y : (p x)) -> MyPair a p
+-- -- search : (n : Nat) -> (ls : Vect n (Nat)) -> (x : Nat) -> Maybe (Fin n)
+-- -- search n ls x = 
+-- -- 	let i : Nat = 0 in
+-- -- 		let ret : Maybe (Fin n) = (Nothing) in
+-- -- 			(search_rec0 n ls x i ret)
+-- -- where 
+-- -- 	search_rec0 : (n : Nat) -> (ls : Vect n (Nat)) -> (x : Nat) -> (i : Nat) -> (ret : Maybe (Fin n)) -> Maybe (Fin n)
+-- -- 	search_rec0 n ls x i ret = 
+-- -- 		(case ((isLT i n)) of
+-- -- 			((No noprf)) => ret
+-- -- 			((Yes yesprf)) => (case ((decEq (index (natToFinLT i) ls) x)) of
+-- -- 				((No noprf)) => let i : Nat = (S i) in
+-- -- 					(search_rec0 n ls x i ret)
+-- -- 				((Yes yesprf)) => let ret : Maybe (Fin n) = (Just (natToFinLT i)) in
+-- -- 					let i : Nat = (S i) in
+-- -- 						(search_rec0 n ls x i ret)))
 
+-- -- import Decidable.Equality
 
--- {a : Type} -> {p : (x : a) -> Type} -> (DecEq a, (x : a) -> DecEq (p x)) => DecEq (MyPair a p) where 
--- 	decEq (MkMyPair x1 y1) (MkMyPair x2 y2) with (decEq x1 x2)
--- 		decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl  with (decEq y1 y2)
--- 			decEq (MkMyPair x1 y1) (MkMyPair x1 y1) | Yes Refl | Yes Refl  = Yes Refl
--- 			decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- 				(Refl) => Refl)))
--- 		decEq (MkMyPair x1 y1) (MkMyPair x2 y2) | No prf  = No (\h => (prf (case (h) of
--- 			(Refl) => Refl)))
-
--- data MyCurse : (a : Type) -> (b : (x : a) -> Type) -> (p : (x : a) -> (y : (b x)) -> Type) -> Type where 
--- 	MkMyCurse : {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (x : a) -> (y : (b x)) -> (pf : (p x y)) -> MyCurse a b p
-
-
--- {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (DecEq a, (x : a) -> DecEq (b x), (x : a) -> (y : (b x)) -> DecEq (p x y)) => DecEq (MyCurse a b p) where 
--- 	decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) with (decEq x1 x2)
--- 		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | Yes Refl  with (decEq y1 y2)
--- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | Yes Refl | Yes Refl  with (decEq pf1 pf2)
--- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf1) | Yes Refl | Yes Refl | Yes Refl  = Yes Refl
--- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- 					(Refl) => Refl)))
--- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- 				(Refl) => Refl)))
--- 		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) | No prf  = No (\h => (prf (case (h) of
--- 			(Refl) => Refl)))
-
--- data MyEither : (a : Type) -> (b : Type) -> Type where 
--- 	MyLeft : (x : a) -> MyEither a b
--- 	MyRight : (y : b) -> MyEither a b
+-- -- data Test3 : (n : Nat) -> (t : Type) -> Type where 
+-- -- 	CTest3 : (n : Nat) -> (x : t) -> (xs : Test3 n t) -> Test3 (S n) t
 
 
--- {a : Type} -> {b : Type} -> (DecEq a, DecEq b) => DecEq (MyEither a b) where 
--- 	decEq (MyLeft x1) (MyLeft x2) with (decEq x1 x2)
--- 		decEq (MyLeft x1) (MyLeft x1) | Yes Refl  = Yes Refl
--- 		decEq (MyLeft x1) (MyLeft x2) | No prf  = No (\h => (prf (case (h) of
--- 			(Refl) => Refl)))
--- 	decEq (MyLeft x1) (MyRight y2) = No (\h => (case (h) of (Refl) impossible))
--- 	decEq (MyRight y1) (MyLeft x2) = No (\h => (case (h) of (Refl) impossible))
--- 	decEq (MyRight y1) (MyRight y2) with (decEq y1 y2)
--- 		decEq (MyRight y1) (MyRight y1) | Yes Refl  = Yes Refl
--- 		decEq (MyRight y1) (MyRight y2) | No prf  = No (\h => (prf (case (h) of
--- 			(Refl) => Refl)))
+-- -- {n : Nat} -> {t : Type} -> ((DecEq t)) => DecEq ((Test3 n t)) where 
+-- -- 	decEq ((CTest3 n x1 xs1)) ((CTest3 n x2 xs2)) with (decEq x1 x2)
+-- -- 		decEq ((CTest3 n x1 xs1)) ((CTest3 n x1 xs2)) | (Yes Refl)  with (decEq xs1 xs2)
+-- -- 			decEq ((CTest3 n x1 xs1)) ((CTest3 n x1 xs1)) | (Yes Refl) | (Yes Refl)  = (Yes Refl)
+-- -- 			decEq ((CTest3 n x1 xs1)) ((CTest3 n x1 xs2)) | (Yes Refl) | (No prf)  = (No (\h => (prf (case (h) of
+-- -- 				((Refl)) => (Refl)))))
+-- -- 		decEq ((CTest3 n x1 xs1)) ((CTest3 n x2 xs2)) | (No prf)  = (No (\h => (prf (case (h) of
+-- -- 			((Refl)) => (Refl)))))
 
 
 
 
+-- -- data BadExample : (n : Nat) -> (t : Type) -> Type where 
+-- -- 	BadConstructor : (head : t) -> (n : Nat) -> BadExample n t
 
+-- -- {n : Nat} -> {t : Type} -> DecEq t => DecEq (BadExample n t) where
+-- -- 	decEq (BadConstructor head1 n1) (BadConstructor head2 n1) with (decEq head1 head2)
+-- -- 		decEq (BadConstructor head1 n1) (BadConstructor head1 n2) | Yes Refl = Yes Refl
+-- -- 		decEq (BadConstructor head1 n1) (BadConstructor head2 n2) | No prf  = No (\h => (prf (case (h) of
+-- -- 				(Refl) => Refl)))
 
+-- -- data BEx2 : (t : Type) -> (n : Nat) -> Type where
+-- -- 	BC2 : (n : Nat) -> (head : t) -> BEx2 t n 
 
+-- -- {t : Type} -> {n : Nat} -> DecEq t => DecEq (BEx2 t n) where
+-- -- 	decEq (BC2 n1 head1) (BC2 n1 head2) with (decEq head1 head2)
+-- -- 		decEq (BC2 n1 head1) (BC2 n1 head1) | Yes Refl = Yes Refl
+-- -- 		decEq (BC2 n1 head1) (BC2 n1 head2) | No prf  = No (\h => (prf (case (h) of
+-- -- 				(Refl) => Refl)))
 
+-- -- data BEx3 : (t : Type) -> Type where
+-- -- 	BC3 : (x : t) -> BEx3 t
 
+-- -- {t : Type} -> DecEq t => DecEq (BEx3 t) where
+-- -- 	decEq (BC3 x1) (BC3 x2) with (decEq x1 x2)
+-- -- 		decEq (BC3 x1) (BC3 x1) | Yes Refl = Yes Refl 
+-- -- 		decEq (BC3 x1) (BC3 x2) | No prf = No (\h => prf (case h of Refl => Refl))
 
--- -- data VectBad : (n : Nat) -> (t : Type) -> Type where 
--- -- 	NilBad : VectBad 0 t
--- -- 	ConsBad : (head : t) -> (n : Nat) -> VectBad (S n) t
+-- -- -- data Test1 : (y : Type) -> (s : y) -> Type where 
+-- -- -- 	C1 : (s : y) -> Test1 y s
 
-
--- -- {n : Nat} -> {t : Type} -> (DecEq t) => DecEq (VectBad n t) where 
--- -- 	decEq (NilBad) (NilBad) = Yes Refl
--- -- 	decEq (ConsBad head1 n) (ConsBad head2 n) with (decEq head1 head2)
--- -- 		decEq (ConsBad head1 n) (ConsBad head1 n) | Yes Refl = Yes Refl
--- -- 		decEq (ConsBad head1 n) (ConsBad head2 n) | No prf  = No (\h => (prf (case (h) of
--- -- 			(Refl) => Refl)))
-
--- -- 	-- decEq (ConsBad head1 n1) (ConsBad head2 n2) with (decEq head1 head2)
--- -- 	-- 	decEq (ConsBad head1 n1) (ConsBad head1 n2) | Yes Refl  with (decEq n1 n2)
--- -- 	-- 		decEq (ConsBad head1 n1) (ConsBad head1 n1) | Yes Refl | Yes Refl  = Yes Refl
--- -- 	-- 		decEq (ConsBad head1 n1) (ConsBad head1 n2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- -- 	-- 			(Refl) => Refl)))
--- -- 	-- 	decEq (ConsBad head1 n1) (ConsBad head2 n2) | No prf  = No (\h => (prf (case (h) of
--- -- 	-- 		(Refl) => Refl)))
-
--- -- data Test2 : (t : Type) -> Type where 
--- -- 	C2 : (s : Bool) -> Test2 t
-
--- -- {t : Type} -> (DecEq t) => DecEq (Test2 t) where 
--- -- 	decEq (C2 s1) (C2 s2) with (decEq s1 s2)
--- -- 		decEq (C2 s1) (C2 s1) | Yes Refl  = Yes Refl
--- -- 		decEq (C2 s1) (C2 s2) | No prf  = No (\h => (prf (case (h) of
--- -- 			(Refl) => Refl)))
-
+-- -- -- {y : Type} -> {s : y} -> {t : Type} -> (DecEq t) => DecEq (Test1 y s) where 
+-- -- -- 	decEq (C1 s1) (C1 s2) with (decEq s1 s2)
+-- -- -- 		decEq (C1 s1) (C1 s1) | Yes Refl  = Yes Refl
+-- -- -- 		decEq (C1 s1) (C1 s2) | No prf  = No (\h => (prf (case (h) of
+-- -- -- 			(Refl) => Refl)))
 
 -- data Vect : (n : Nat) -> (t : Type) -> Type where 
 -- 	Nil : Vect 0 t
 -- 	Cons : (head : t) -> (tail : Vect n t) -> Vect (S n) t
+
 
 -- {n : Nat} -> {t : Type} -> (DecEq t) => DecEq (Vect n t) where 
 -- 	decEq (Nil) (Nil) = Yes Refl
@@ -250,6 +211,48 @@ data Vect : (n : Nat) -> (t : Type) -> Type where
 -- 				(Refl) => Refl)))
 -- 		decEq (Cons head1 tail1) (Cons head2 tail2) | No prf  = No (\h => (prf (case (h) of
 -- 			(Refl) => Refl)))
+
+-- -- data Test : (a : Type) -> (z : Type) -> (p : (z : Type) -> (a : x) -> Type) -> Type where 
+-- -- 	MkTest : (x : a) -> (z : Type) -> (pf : (p z x)) -> Test a z p
+
+
+-- -- {a : Type} -> {z : Type} -> {p : (z : Type) -> (a : x) -> Type} -> (DecEq a, DecEq z, (z : Type) -> (a : x) -> DecEq (p z a)) => DecEq (Test a z p) where 
+-- -- 	decEq (MkTest x1 z pf1) (MkTest x2 z pf2) with (decEq x1 x2)
+-- -- 		decEq (MkTest x1 z pf1) (MkTest x1 z pf2) | Yes Refl  with (decEq pf1 pf2)
+-- -- 			decEq (MkTest x1 z pf1) (MkTest x1 z pf1) | Yes Refl | Yes Refl  = Yes Refl
+-- -- 			decEq (MkTest x1 z pf1) (MkTest x1 z pf2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- 				(Refl) => Refl)))
+-- -- 		decEq (MkTest x1 z pf1) (MkTest x2 z pf2) | No prf  = No (\h => (prf (case (h) of
+-- -- 			(Refl) => Refl)))
+
+-- -- data MyPair : (a : Type) -> (p : (x : a) -> Type) -> Type where 
+-- -- 	MkMyPair : (x : a) -> (y : (p x)) -> MyPair a p
+
+
+-- -- {a : Type} -> {p : (x : a) -> Type} -> (DecEq a, (x : a) -> DecEq (p x)) => DecEq (MyPair a p) where 
+-- -- 	decEq (MkMyPair x1 y1) (MkMyPair x2 y2) with (decEq x1 x2)
+-- -- 		decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl  with (decEq y1 y2)
+-- -- 			decEq (MkMyPair x1 y1) (MkMyPair x1 y1) | Yes Refl | Yes Refl  = Yes Refl
+-- -- 			decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- 				(Refl) => Refl)))
+-- -- 		decEq (MkMyPair x1 y1) (MkMyPair x2 y2) | No prf  = No (\h => (prf (case (h) of
+-- -- 			(Refl) => Refl)))
+
+-- -- data MyCurse : (a : Type) -> (b : (x : a) -> Type) -> (p : (x : a) -> (y : (b x)) -> Type) -> Type where 
+-- -- 	MkMyCurse : {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (x : a) -> (y : (b x)) -> (pf : (p x y)) -> MyCurse a b p
+
+
+-- -- {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (DecEq a, (x : a) -> DecEq (b x), (x : a) -> (y : (b x)) -> DecEq (p x y)) => DecEq (MyCurse a b p) where 
+-- -- 	decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) with (decEq x1 x2)
+-- -- 		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | Yes Refl  with (decEq y1 y2)
+-- -- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | Yes Refl | Yes Refl  with (decEq pf1 pf2)
+-- -- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf1) | Yes Refl | Yes Refl | Yes Refl  = Yes Refl
+-- -- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- 					(Refl) => Refl)))
+-- -- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- 				(Refl) => Refl)))
+-- -- 		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) | No prf  = No (\h => (prf (case (h) of
+-- -- 			(Refl) => Refl)))
 
 -- -- data MyEither : (a : Type) -> (b : Type) -> Type where 
 -- -- 	MyLeft : (x : a) -> MyEither a b
@@ -272,267 +275,337 @@ data Vect : (n : Nat) -> (t : Type) -> Type where
 
 
 
+
+
+
+
+
+-- -- -- data VectBad : (n : Nat) -> (t : Type) -> Type where 
+-- -- -- 	NilBad : VectBad 0 t
+-- -- -- 	ConsBad : (head : t) -> (n : Nat) -> VectBad (S n) t
+
+
+-- -- -- {n : Nat} -> {t : Type} -> (DecEq t) => DecEq (VectBad n t) where 
+-- -- -- 	decEq (NilBad) (NilBad) = Yes Refl
+-- -- -- 	decEq (ConsBad head1 n) (ConsBad head2 n) with (decEq head1 head2)
+-- -- -- 		decEq (ConsBad head1 n) (ConsBad head1 n) | Yes Refl = Yes Refl
+-- -- -- 		decEq (ConsBad head1 n) (ConsBad head2 n) | No prf  = No (\h => (prf (case (h) of
+-- -- -- 			(Refl) => Refl)))
+
+-- -- -- 	-- decEq (ConsBad head1 n1) (ConsBad head2 n2) with (decEq head1 head2)
+-- -- -- 	-- 	decEq (ConsBad head1 n1) (ConsBad head1 n2) | Yes Refl  with (decEq n1 n2)
+-- -- -- 	-- 		decEq (ConsBad head1 n1) (ConsBad head1 n1) | Yes Refl | Yes Refl  = Yes Refl
+-- -- -- 	-- 		decEq (ConsBad head1 n1) (ConsBad head1 n2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- -- 	-- 			(Refl) => Refl)))
+-- -- -- 	-- 	decEq (ConsBad head1 n1) (ConsBad head2 n2) | No prf  = No (\h => (prf (case (h) of
+-- -- -- 	-- 		(Refl) => Refl)))
+
+-- -- -- data Test2 : (t : Type) -> Type where 
+-- -- -- 	C2 : (s : Bool) -> Test2 t
+
+-- -- -- {t : Type} -> (DecEq t) => DecEq (Test2 t) where 
+-- -- -- 	decEq (C2 s1) (C2 s2) with (decEq s1 s2)
+-- -- -- 		decEq (C2 s1) (C2 s1) | Yes Refl  = Yes Refl
+-- -- -- 		decEq (C2 s1) (C2 s2) | No prf  = No (\h => (prf (case (h) of
+-- -- -- 			(Refl) => Refl)))
+
+
+-- -- data Vect : (n : Nat) -> (t : Type) -> Type where 
+-- -- 	Nil : Vect 0 t
+-- -- 	Cons : (head : t) -> (tail : Vect n t) -> Vect (S n) t
+
+-- -- {n : Nat} -> {t : Type} -> (DecEq t) => DecEq (Vect n t) where 
+-- -- 	decEq (Nil) (Nil) = Yes Refl
+-- -- 	decEq (Cons head1 tail1) (Cons head2 tail2) with (decEq head1 head2)
+-- -- 		decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl  with (decEq tail1 tail2)
+-- -- 			decEq (Cons head1 tail1) (Cons head1 tail1) | Yes Refl | Yes Refl  = Yes Refl
+-- -- 			decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- 				(Refl) => Refl)))
+-- -- 		decEq (Cons head1 tail1) (Cons head2 tail2) | No prf  = No (\h => (prf (case (h) of
+-- -- 			(Refl) => Refl)))
+
+-- -- -- data MyEither : (a : Type) -> (b : Type) -> Type where 
+-- -- -- 	MyLeft : (x : a) -> MyEither a b
+-- -- -- 	MyRight : (y : b) -> MyEither a b
+
+
+-- -- -- {a : Type} -> {b : Type} -> (DecEq a, DecEq b) => DecEq (MyEither a b) where 
+-- -- -- 	decEq (MyLeft x1) (MyLeft x2) with (decEq x1 x2)
+-- -- -- 		decEq (MyLeft x1) (MyLeft x1) | Yes Refl  = Yes Refl
+-- -- -- 		decEq (MyLeft x1) (MyLeft x2) | No prf  = No (\h => (prf (case (h) of
+-- -- -- 			(Refl) => Refl)))
+-- -- -- 	decEq (MyLeft x1) (MyRight y2) = No (\h => (case (h) of (Refl) impossible))
+-- -- -- 	decEq (MyRight y1) (MyLeft x2) = No (\h => (case (h) of (Refl) impossible))
+-- -- -- 	decEq (MyRight y1) (MyRight y2) with (decEq y1 y2)
+-- -- -- 		decEq (MyRight y1) (MyRight y1) | Yes Refl  = Yes Refl
+-- -- -- 		decEq (MyRight y1) (MyRight y2) | No prf  = No (\h => (prf (case (h) of
+-- -- -- 			(Refl) => Refl)))
+
+
+
+
+
+-- -- -- -- -- record DPairRec (t : Type) (p : (a : t) -> Type) where 
+-- -- -- -- -- 	constructor MkDPairRec
+-- -- -- -- -- 	fst : t
+-- -- -- -- -- 	snd : (p fst)
+
+-- -- -- -- -- {t : Type} -> {p : (a : t) -> Type} -> (DecEq t, (a : t) -> DecEq (p a)) => DecEq (DPairRec t p) where 
+-- -- -- -- -- 	decEq (MkDPairRec fst1 snd1) (MkDPairRec fst2 snd2) with (decEq fst1 fst2)
+-- -- -- -- -- 		decEq (MkDPairRec fst1 snd1) (MkDPairRec fst1 snd2) | Yes Refl with (decEq snd1 snd2)
+-- -- -- -- -- 			decEq (MkDPairRec fst1 snd1) (MkDPairRec fst1 snd1) | Yes Refl | Yes Refl = Yes Refl 
+-- -- -- -- -- 			decEq (MkDPairRec fst1 snd1) (MkDPairRec fst1 snd2) | Yes Refl | No prf = No (\h => (prf (case h of Refl => Refl)))
+-- -- -- -- -- 		decEq (MkDPairRec fst1 snd1) (MkDPairRec fst2 snd2) | No prf = No (\h => (prf (case h of Refl => Refl)))
+
 -- -- -- -- record DPairRec (t : Type) (p : (a : t) -> Type) where 
 -- -- -- -- 	constructor MkDPairRec
 -- -- -- -- 	fst : t
 -- -- -- -- 	snd : (p fst)
 
+
 -- -- -- -- {t : Type} -> {p : (a : t) -> Type} -> (DecEq t, (a : t) -> DecEq (p a)) => DecEq (DPairRec t p) where 
 -- -- -- -- 	decEq (MkDPairRec fst1 snd1) (MkDPairRec fst2 snd2) with (decEq fst1 fst2)
--- -- -- -- 		decEq (MkDPairRec fst1 snd1) (MkDPairRec fst1 snd2) | Yes Refl with (decEq snd1 snd2)
--- -- -- -- 			decEq (MkDPairRec fst1 snd1) (MkDPairRec fst1 snd1) | Yes Refl | Yes Refl = Yes Refl 
--- -- -- -- 			decEq (MkDPairRec fst1 snd1) (MkDPairRec fst1 snd2) | Yes Refl | No prf = No (\h => (prf (case h of Refl => Refl)))
--- -- -- -- 		decEq (MkDPairRec fst1 snd1) (MkDPairRec fst2 snd2) | No prf = No (\h => (prf (case h of Refl => Refl)))
-
--- -- -- record DPairRec (t : Type) (p : (a : t) -> Type) where 
--- -- -- 	constructor MkDPairRec
--- -- -- 	fst : t
--- -- -- 	snd : (p fst)
-
-
--- -- -- {t : Type} -> {p : (a : t) -> Type} -> (DecEq t, (a : t) -> DecEq (p a)) => DecEq (DPairRec t p) where 
--- -- -- 	decEq (MkDPairRec fst1 snd1) (MkDPairRec fst2 snd2) with (decEq fst1 fst2)
--- -- -- 		decEq (MkDPairRec fst1 snd1) (MkDPairRec fst1 snd2) | Yes Refl  with (decEq snd1 snd2)
--- -- -- 			decEq (MkDPairRec fst1 snd1) (MkDPairRec fst1 snd1) | Yes Refl | Yes Refl  = Yes Refl
--- -- -- 			decEq (MkDPairRec fst1 snd1) (MkDPairRec fst1 snd2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- -- -- 				(Refl) => Refl)))
--- -- -- 		decEq (MkDPairRec fst1 snd1) (MkDPairRec fst2 snd2) | No prf  = No (\h => (prf (case (h) of
--- -- -- 			(Refl) => Refl)))
+-- -- -- -- 		decEq (MkDPairRec fst1 snd1) (MkDPairRec fst1 snd2) | Yes Refl  with (decEq snd1 snd2)
+-- -- -- -- 			decEq (MkDPairRec fst1 snd1) (MkDPairRec fst1 snd1) | Yes Refl | Yes Refl  = Yes Refl
+-- -- -- -- 			decEq (MkDPairRec fst1 snd1) (MkDPairRec fst1 snd2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- 				(Refl) => Refl)))
+-- -- -- -- 		decEq (MkDPairRec fst1 snd1) (MkDPairRec fst2 snd2) | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- 			(Refl) => Refl)))
 
 
 
--- -- -- data Test : (a : Type) -> (z : Type) -> (p : (z : Type) -> (a : x) -> Type) -> Type where 
--- -- -- 	MkTest : (x : a) -> (z : Type) -> (pf : (p z x)) -> Test a z p
+-- -- -- -- data Test : (a : Type) -> (z : Type) -> (p : (z : Type) -> (a : x) -> Type) -> Type where 
+-- -- -- -- 	MkTest : (x : a) -> (z : Type) -> (pf : (p z x)) -> Test a z p
 
 
--- -- -- {a : Type} -> {z : Type} -> {p : (z : Type) -> (a : x) -> Type} -> (DecEq a, DecEq z, (z : Type) -> (a : x) -> DecEq (p z a)) => DecEq (Test a z p) where 
--- -- -- 	decEq (MkTest x1 z pf1) (MkTest x2 z pf2) with (decEq x1 x2)
--- -- -- 		decEq (MkTest x1 z pf1) (MkTest x1 z pf2) | Yes Refl  with (decEq pf1 pf2)
--- -- -- 			decEq (MkTest x1 z pf1) (MkTest x1 z pf1) | Yes Refl | Yes Refl  = Yes Refl
--- -- -- 			decEq (MkTest x1 z pf1) (MkTest x1 z pf2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- -- -- 				(Refl) => Refl)))
--- -- -- 		decEq (MkTest x1 z pf1) (MkTest x2 z pf2) | No prf  = No (\h => (prf (case (h) of
--- -- -- 			(Refl) => Refl)))
+-- -- -- -- {a : Type} -> {z : Type} -> {p : (z : Type) -> (a : x) -> Type} -> (DecEq a, DecEq z, (z : Type) -> (a : x) -> DecEq (p z a)) => DecEq (Test a z p) where 
+-- -- -- -- 	decEq (MkTest x1 z pf1) (MkTest x2 z pf2) with (decEq x1 x2)
+-- -- -- -- 		decEq (MkTest x1 z pf1) (MkTest x1 z pf2) | Yes Refl  with (decEq pf1 pf2)
+-- -- -- -- 			decEq (MkTest x1 z pf1) (MkTest x1 z pf1) | Yes Refl | Yes Refl  = Yes Refl
+-- -- -- -- 			decEq (MkTest x1 z pf1) (MkTest x1 z pf2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- 				(Refl) => Refl)))
+-- -- -- -- 		decEq (MkTest x1 z pf1) (MkTest x2 z pf2) | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- 			(Refl) => Refl)))
 
--- -- -- -- data Test : (a : Type) -> (b : Type) -> (p : Type -> (x : a) -> Type) -> Type where
--- -- -- -- 	MkTest : (x : a) -> (y : b) -> (z : Type) -> (pf : p z x) -> Test a b p 
+-- -- -- -- -- data Test : (a : Type) -> (b : Type) -> (p : Type -> (x : a) -> Type) -> Type where
+-- -- -- -- -- 	MkTest : (x : a) -> (y : b) -> (z : Type) -> (pf : p z x) -> Test a b p 
 
--- -- -- data MyPair : (a : Type) -> (p : (x : 	a) -> Type) -> Type where 
--- -- -- 	MkMyPair : (x : a) -> (y : (p x)) -> MyPair a p
-
-
--- -- -- {a : Type} -> {p : (x : a) -> Type} -> (DecEq a, (x : a) -> DecEq (p x)) => DecEq (MyPair a p) where 
--- -- -- 		decEq (MkMyPair x1 y1) (MkMyPair x2 y2) with (decEq x1 x2)
--- -- -- 			decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl  with (decEq y1 y2)
--- -- -- 				decEq (MkMyPair x1 y1) (MkMyPair x1 y1) | Yes Refl | Yes Refl  = Yes Refl
--- -- -- 				decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- -- -- 					(Refl) => Refl)))
--- -- -- 			decEq (MkMyPair x1 y1) (MkMyPair x2 y2) | No prf  = No (\h => (prf (case (h) of
--- -- -- 				(Refl) => Refl)))
-
--- -- -- data MyCurse : (a : Type) -> (b : (x : 		a) -> Type) -> (p : (x : a) -> (y : (b x)) -> Type) -> Type where 
--- -- -- 	MkMyCurse : {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (x : a) -> (y : (b x)) -> (pf : (p x y)) -> MyCurse a b p
+-- -- -- -- data MyPair : (a : Type) -> (p : (x : 	a) -> Type) -> Type where 
+-- -- -- -- 	MkMyPair : (x : a) -> (y : (p x)) -> MyPair a p
 
 
--- -- -- {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (DecEq a, (x : a) -> DecEq (b x), (x : a) -> (y : (b x)) -> DecEq (p x y)) => DecEq (MyCurse a b p) where 
--- -- -- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) with (decEq x1 x2)
--- -- -- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | Yes Refl  with (decEq y1 y2)
--- -- -- 					decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | Yes Refl | Yes Refl  with (decEq pf1 pf2)
--- -- -- 						decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf1) | Yes Refl | Yes Refl | Yes Refl  = Yes Refl
--- -- -- 						decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- -- -- 							(Refl) => Refl)))
--- -- -- 					decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- -- -- 						(Refl) => Refl)))
--- -- -- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) | No prf  = No (\h => (prf (case (h) of
--- -- -- 					(Refl) => Refl)))
+-- -- -- -- {a : Type} -> {p : (x : a) -> Type} -> (DecEq a, (x : a) -> DecEq (p x)) => DecEq (MyPair a p) where 
+-- -- -- -- 		decEq (MkMyPair x1 y1) (MkMyPair x2 y2) with (decEq x1 x2)
+-- -- -- -- 			decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl  with (decEq y1 y2)
+-- -- -- -- 				decEq (MkMyPair x1 y1) (MkMyPair x1 y1) | Yes Refl | Yes Refl  = Yes Refl
+-- -- -- -- 				decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- 					(Refl) => Refl)))
+-- -- -- -- 			decEq (MkMyPair x1 y1) (MkMyPair x2 y2) | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- 				(Refl) => Refl)))
 
-
--- -- -- -- data MyPair : (a : Type) -> (p : (x : a) -> Type) -> Type where 
--- -- -- -- 	MkMyPair : (x : a) -> (pf : p x) -> MyPair a p
-
--- -- -- -- data MyCurse : (a : Type) -> (b : (x : a) -> Type) -> (p : (x : a) -> (y : b x) -> Type) -> Type where
--- -- -- -- 	MkMyCurse : {a : _} -> {b : a -> _} -> {p : a -> _} -> (x : a) -> (y : b x) -> (pf : p x y) -> MyCurse a b p
-
--- -- -- -- data MyCurse : (a : Type) -> (b : (x : a) -> Type) -> (p : (x : a) -> (y : (b x)) -> Type) -> Type where 
+-- -- -- -- data MyCurse : (a : Type) -> (b : (x : 		a) -> Type) -> (p : (x : a) -> (y : (b x)) -> Type) -> Type where 
 -- -- -- -- 	MkMyCurse : {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (x : a) -> (y : (b x)) -> (pf : (p x y)) -> MyCurse a b p
 
 
 -- -- -- -- {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (DecEq a, (x : a) -> DecEq (b x), (x : a) -> (y : (b x)) -> DecEq (p x y)) => DecEq (MyCurse a b p) where 
--- -- -- -- 	decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) with (decEq x1 x2)
--- -- -- -- 		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | Yes Refl  with (decEq y1 y2)
--- -- -- -- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | Yes Refl | Yes Refl  with (decEq pf1 pf2)
--- -- -- -- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf1) | Yes Refl | Yes Refl | Yes Refl  = Yes Refl
--- -- -- -- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) with (decEq x1 x2)
+-- -- -- -- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | Yes Refl  with (decEq y1 y2)
+-- -- -- -- 					decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | Yes Refl | Yes Refl  with (decEq pf1 pf2)
+-- -- -- -- 						decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf1) | Yes Refl | Yes Refl | Yes Refl  = Yes Refl
+-- -- -- -- 						decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- 							(Refl) => Refl)))
+-- -- -- -- 					decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- 						(Refl) => Refl)))
+-- -- -- -- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) | No prf  = No (\h => (prf (case (h) of
 -- -- -- -- 					(Refl) => Refl)))
--- -- -- -- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- -- -- -- 				(Refl) => Refl)))
--- -- -- -- 		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) | No prf  = No (\h => (prf (case (h) of
--- -- -- -- 			(Refl) => Refl)))
-
--- -- -- -- implementation (DecEq a, (x : a) -> DecEq (b x), (x : a) -> (y : b x) -> DecEq (p x y)) => DecEq (MyCurse a b p) where
-
--- -- -- -- fstInjective : (MkMyPair x px = MkMyPair y py) -> x = y
--- -- -- -- fstInjective Refl = Refl 
-
--- -- -- -- sndInjective : {x : a} -> {y : a} -> {px : p x} -> {py : p y} -> (MkMyPair {p = p} x px = MkMyPair {p = p} y py) -> (px = py)
--- -- -- -- sndInjective Refl = Refl
-
--- -- -- -- implementation (DecEq a, (x : a) -> DecEq (p x)) => DecEq (MyPair a p) where 
--- -- -- -- 	decEq (MkMyPair x px) (MkMyPair y py) with (decEq x y) 
--- -- -- -- 		decEq (MkMyPair x px) (MkMyPair x py) | Yes Refl with (decEq px py)
--- -- -- -- 			decEq (MkMyPair x px) (MkMyPair x px) | Yes Refl | Yes Refl = Yes Refl 
--- -- -- -- 			decEq (MkMyPair x px) (MkMyPair x py) | (Yes Refl) | (No prf) = No $ (\h => prf (case h of Refl => Refl))
--- -- -- -- 		decEq (MkMyPair x px) (MkMyPair y py) | No prf = No $ (\h => prf (case h of Refl => Refl))
-
--- -- -- -- data MyPair : (a : Type) -> (p : (x : a) -> Type) -> Type where 
--- -- -- -- 	MkMyPair : (x : a) -> (y : (p x)) -> MyPair a p
 
 
--- -- -- -- (DecEq a,(x : a) -> DecEq (p x)) => DecEq (MyPair a p) where 
--- -- -- -- 	decEq (MkMyPair x1 y1) (MkMyPair x2 y2) with (decEq x1 x2)
--- -- -- -- 		decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl  with (decEq y1 y2)
--- -- -- -- 			decEq (MkMyPair x1 y1) (MkMyPair x1 y1) | Yes Refl | Yes Refl  = Yes Refl
--- -- -- -- 			decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- -- -- -- 				(Refl) => Refl)))
--- -- -- -- 		decEq (MkMyPair x1 y1) (MkMyPair x2 y2) | No prf  = No (\h => (prf (case (h) of
--- -- -- -- 			(Refl) => Refl)))
+-- -- -- -- -- data MyPair : (a : Type) -> (p : (x : a) -> Type) -> Type where 
+-- -- -- -- -- 	MkMyPair : (x : a) -> (pf : p x) -> MyPair a p
 
--- -- -- -- data MyVect : (n : Nat) -> (t : Type) -> Type where 
--- -- -- -- 	MyNil : MyVect 0 t
--- -- -- -- 	MyCons : (head : t) -> (tail : MyVect n t) -> MyVect (S n) t
+-- -- -- -- -- data MyCurse : (a : Type) -> (b : (x : a) -> Type) -> (p : (x : a) -> (y : b x) -> Type) -> Type where
+-- -- -- -- -- 	MkMyCurse : {a : _} -> {b : a -> _} -> {p : a -> _} -> (x : a) -> (y : b x) -> (pf : p x y) -> MyCurse a b p
 
--- -- -- -- consHeadInjective : (MyCons h1 t1 = MyCons h2 t2) -> h1 = h2
--- -- -- -- consHeadInjective Refl = Refl
+-- -- -- -- -- data MyCurse : (a : Type) -> (b : (x : a) -> Type) -> (p : (x : a) -> (y : (b x)) -> Type) -> Type where 
+-- -- -- -- -- 	MkMyCurse : {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (x : a) -> (y : (b x)) -> (pf : (p x y)) -> MyCurse a b p
 
--- -- -- -- consTailInjective : (MyCons h1 t1 = MyCons h2 t2) -> t1 = t2
--- -- -- -- consTailInjective Refl = Refl
 
--- -- -- -- (DecEq t) => DecEq (MyVect n t) where 
--- -- -- -- 	decEq MyNil MyNil = Yes Refl 
--- -- -- -- 	decEq (MyCons h1 t1) (MyCons h2 t2) with (decEq h1 h2)
--- -- -- -- 		decEq (MyCons h1 t1) (MyCons h1 t2) | Yes Refl with (decEq t1 t2) 
--- -- -- -- 			decEq (MyCons h1 t1) (MyCons h1 t1) | Yes Refl | Yes Refl = Yes Refl 
--- -- -- -- 			decEq (MyCons h1 t1) (MyCons h1 t2) | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
--- -- -- -- 		decEq (MyCons h1 t1) (MyCons h2 t2) | No prf = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (DecEq a, (x : a) -> DecEq (b x), (x : a) -> (y : (b x)) -> DecEq (p x y)) => DecEq (MyCurse a b p) where 
+-- -- -- -- -- 	decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) with (decEq x1 x2)
+-- -- -- -- -- 		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | Yes Refl  with (decEq y1 y2)
+-- -- -- -- -- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | Yes Refl | Yes Refl  with (decEq pf1 pf2)
+-- -- -- -- -- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf1) | Yes Refl | Yes Refl | Yes Refl  = Yes Refl
+-- -- -- -- -- 				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- -- 					(Refl) => Refl)))
+-- -- -- -- -- 			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- -- 				(Refl) => Refl)))
+-- -- -- -- -- 		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- -- 			(Refl) => Refl)))
 
--- -- -- -- (DecEq t) => DecEq (MyVect n t) where 
--- -- -- -- 	decEq MyNil MyNil = Yes Refl 
--- -- -- -- 	decEq (MyCons h1 t1) (MyCons h2 t2) with (decEq h1 h2) | (decEq t1 t2) 
--- -- -- -- 			decEq (MyCons h1 t1) (MyCons h1 t1) | Yes Refl | Yes Refl = Yes Refl 
--- -- -- -- 			decEq (MyCons h1 t1) (MyCons h1 t2) | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
--- -- -- -- 			decEq (MyCons h1 t1) (MyCons h2 t2) | No prf | _ = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- implementation (DecEq a, (x : a) -> DecEq (b x), (x : a) -> (y : b x) -> DecEq (p x y)) => DecEq (MyCurse a b p) where
 
-data List : (t : Type) -> Type where
-	Nil : List t
-	Cons : (head : t) -> (tail : List t) -> List t
+-- -- -- -- -- fstInjective : (MkMyPair x px = MkMyPair y py) -> x = y
+-- -- -- -- -- fstInjective Refl = Refl 
 
-(DecEq t) => DecEq (List t) where
-	decEq Nil Nil = Yes Refl 
-	decEq (Cons h1 t1) (Cons h2 t2) with (decEq h1 h2)
-		decEq (Cons h1 t1) (Cons h1 t2) | Yes Refl with (decEq t1 t2)
-			decEq (Cons h1 t1) (Cons h1 t1) | Yes Refl | Yes Refl = Yes Refl 
-			decEq (Cons h1 t1) (Cons h1 t2) | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
-		decEq (Cons h1 t1) (Cons h2 t2) | No prf = No $ (\h => prf (case h of Refl => Refl))
-	decEq Nil (Cons h t) = No (\h => (case h of Refl impossible ))
-	decEq (Cons h t) Nil = No (\h => (case h of Refl impossible ))
+-- -- -- -- -- sndInjective : {x : a} -> {y : a} -> {px : p x} -> {py : p y} -> (MkMyPair {p = p} x px = MkMyPair {p = p} y py) -> (px = py)
+-- -- -- -- -- sndInjective Refl = Refl
 
--- -- -- -- (DecEq t) => DecEq (List t) where
--- -- -- -- 	decEq Nil Nil = Yes Refl 
--- -- -- -- 	decEq (Cons h1 t1) (Cons h2 t2) with (decEq h1 h2) | (decEq t1 t2)
--- -- -- -- 		decEq (Cons h1 t1) (Cons h1 t1) | Yes Refl | Yes Refl = Yes Refl 
--- -- -- -- 		decEq (Cons h1 t1) (Cons h2 t2) | _ | No prf = No $ (\h => prf (case h of Refl => Refl))
--- -- -- -- 		decEq (Cons h1 t1) (Cons h2 t2) | No prf | _ = No $ (\h => prf (case h of Refl => Refl))
--- -- -- -- 	decEq Nil (Cons _ _) = No (\h => (case h of Refl impossible ))
--- -- -- -- 	decEq (Cons _ _) Nil = No (\h => (case h of Refl impossible ))
+-- -- -- -- -- implementation (DecEq a, (x : a) -> DecEq (p x)) => DecEq (MyPair a p) where 
+-- -- -- -- -- 	decEq (MkMyPair x px) (MkMyPair y py) with (decEq x y) 
+-- -- -- -- -- 		decEq (MkMyPair x px) (MkMyPair x py) | Yes Refl with (decEq px py)
+-- -- -- -- -- 			decEq (MkMyPair x px) (MkMyPair x px) | Yes Refl | Yes Refl = Yes Refl 
+-- -- -- -- -- 			decEq (MkMyPair x px) (MkMyPair x py) | (Yes Refl) | (No prf) = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- 		decEq (MkMyPair x px) (MkMyPair y py) | No prf = No $ (\h => prf (case h of Refl => Refl))
 
-(DecEq t) => DecEq (List t) where 
-	decEq (Nil) (Nil) = Yes Refl
-	decEq (Nil) (Cons head2 tail2) = No (\h => (case (h) of (Refl) impossible))
-	decEq (Cons head1 tail1) (Nil) = No (\h => (case (h) of (Refl) impossible))
-	decEq (Cons head1 tail1) (Cons head2 tail2) with (decEq head1 head2)
-		decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl with (decEq tail1 tail2)
-			decEq (Cons head1 tail1) (Cons head1 tail1) | Yes Refl | Yes Refl  = Yes Refl
-			decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
-				(Refl) => Refl)))
-		decEq (Cons head1 tail1) (Cons head2 tail2) | No prf  = No (\h => (prf (case (h) of
-			(Refl) => Refl)))
+-- -- -- -- -- data MyPair : (a : Type) -> (p : (x : a) -> Type) -> Type where 
+-- -- -- -- -- 	MkMyPair : (x : a) -> (y : (p x)) -> MyPair a p
 
-data SoManyArgs : (t : Type) -> Type where 
-	MyC : (a : t) -> (b : t) -> (c : t) -> (d : t) -> SoManyArgs t
 
--- -- -- -- data LessArgs : (t : Type) -> Type where 
--- -- -- -- 	MyC2 : (a : t) -> (b : t) -> LessArgs t
+-- -- -- -- -- (DecEq a,(x : a) -> DecEq (p x)) => DecEq (MyPair a p) where 
+-- -- -- -- -- 	decEq (MkMyPair x1 y1) (MkMyPair x2 y2) with (decEq x1 x2)
+-- -- -- -- -- 		decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl  with (decEq y1 y2)
+-- -- -- -- -- 			decEq (MkMyPair x1 y1) (MkMyPair x1 y1) | Yes Refl | Yes Refl  = Yes Refl
+-- -- -- -- -- 			decEq (MkMyPair x1 y1) (MkMyPair x1 y2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- -- 				(Refl) => Refl)))
+-- -- -- -- -- 		decEq (MkMyPair x1 y1) (MkMyPair x2 y2) | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- -- 			(Refl) => Refl)))
 
--- -- -- -- (DecEq t) => DecEq (LessArgs t) where
--- -- -- -- 	decEq (MyC2 a1 b1) (MyC2 a2 b2) with (decEq a1 a2)
--- -- -- -- 		decEq (MyC2 a1 b1) (MyC2 a1 b2) | Yes Refl with (decEq b1 b2) 
--- -- -- -- 			decEq (MyC2 a1 b1) (MyC2 a1 b1) | Yes Refl | Yes Refl = Yes Refl 
--- -- -- -- 			decEq (MyC2 a1 b1) (MyC2 a1 b2) | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
--- -- -- -- 		decEq (MyC2 a1 b1) (MyC2 a2 b2) | No prf = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- data MyVect : (n : Nat) -> (t : Type) -> Type where 
+-- -- -- -- -- 	MyNil : MyVect 0 t
+-- -- -- -- -- 	MyCons : (head : t) -> (tail : MyVect n t) -> MyVect (S n) t
 
--- -- -- -- (DecEq t) => DecEq (LessArgs t) where 
--- -- -- -- 	decEq (MyC2 a1 b1) (MyC2 a2 b2) with (decEq a1 a2)
--- -- -- -- 		decEq (MyC2 a1 b1) (MyC2 a1 b2) | Yes Refl  with (decEq b1 b2)
--- -- -- -- 			decEq (MyC2 a1 b1) (MyC2 a1 b1) | Yes Refl | Yes Refl  = Yes Refl
--- -- -- -- 			decEq (MyC2 a1 b1) (MyC2 a1 b2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- -- -- -- 				(Refl) => Refl)))
--- -- -- -- 		decEq (MyC2 a1 b1) (MyC2 a2 b2) | No prf  = No (\h => (prf (case (h) of
--- -- -- -- 			(Refl) => Refl)))
+-- -- -- -- -- consHeadInjective : (MyCons h1 t1 = MyCons h2 t2) -> h1 = h2
+-- -- -- -- -- consHeadInjective Refl = Refl
 
--- -- -- -- (DecEq t) => DecEq (SoManyArgs t) where
--- -- -- -- 	decEq (MyC a1 b1 c1) (MyC a2 b2 c2) with (decEq a1 a2)
--- -- -- -- 		decEq (MyC a1 b1 c1) (MyC a1 b2 c2) | Yes Refl with (decEq b1 b2) 
--- -- -- -- 			decEq (MyC a1 b1 c1) (MyC a1 b1 c2) | Yes Refl | Yes Refl with (decEq c1 c2)
--- -- -- -- 				decEq (MyC a1 b1 c1) (MyC a1 b1 c1) | Yes Refl | Yes Refl | Yes Refl = Yes Refl 
--- -- -- -- 				decEq (MyC a1 b1 c1) (MyC a1 b1 c2) | Yes Refl | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
--- -- -- -- 			decEq (MyC a1 b1 c1) (MyC a1 b2 c2) | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
--- -- -- -- 		decEq (MyC a1 b1 c1) (MyC a2 b2 c2) | No prf = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- consTailInjective : (MyCons h1 t1 = MyCons h2 t2) -> t1 = t2
+-- -- -- -- -- consTailInjective Refl = Refl
 
-(DecEq t) => DecEq (SoManyArgs t) where 
-	decEq (MyC a1 b1 c1 d1) (MyC a2 b2 c2 d2) with (decEq a1 a2)
-		decEq (MyC a1 b1 c1 d1) (MyC a1 b2 c2 d2) | Yes Refl  with (decEq b1 b2)
-			decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c2 d2) | Yes Refl | Yes Refl  with (decEq c1 c2)
-				decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c1 d2) | Yes Refl | Yes Refl | Yes Refl  with (decEq d1 d2)
-					decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c1 d1) | Yes Refl | Yes Refl | Yes Refl | Yes Refl  = Yes Refl
-					decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c1 d2) | Yes Refl | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
-						(Refl) => Refl)))
-				decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c2 d2) | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
-					(Refl) => Refl)))
-			decEq (MyC a1 b1 c1 d1) (MyC a1 b2 c2 d2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
-				(Refl) => Refl)))
-		decEq (MyC a1 b1 c1 d1) (MyC a2 b2 c2 d2) | No prf  = No (\h => (prf (case (h) of
-			(Refl) => Refl)))
+-- -- -- -- -- (DecEq t) => DecEq (MyVect n t) where 
+-- -- -- -- -- 	decEq MyNil MyNil = Yes Refl 
+-- -- -- -- -- 	decEq (MyCons h1 t1) (MyCons h2 t2) with (decEq h1 h2)
+-- -- -- -- -- 		decEq (MyCons h1 t1) (MyCons h1 t2) | Yes Refl with (decEq t1 t2) 
+-- -- -- -- -- 			decEq (MyCons h1 t1) (MyCons h1 t1) | Yes Refl | Yes Refl = Yes Refl 
+-- -- -- -- -- 			decEq (MyCons h1 t1) (MyCons h1 t2) | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- 		decEq (MyCons h1 t1) (MyCons h2 t2) | No prf = No $ (\h => prf (case h of Refl => Refl))
 
--- -- -- -- (DecEq t) => DecEq (SoManyArgs t) where
--- -- -- -- 	decEq (MyC a1 b1 c1) (MyC a2 b2 c2) with (decEq a1 a2) | (decEq b1 b2) | (decEq c1 c2)
--- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a1 b1 c1 ) | Yes Refl | Yes Refl | Yes Refl = Yes Refl 
--- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a1 b1 c2 ) | Yes Refl | Yes Refl | No prf  = No $ (\h => prf (case h of Refl => Refl)) 
--- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a1 b2 c1 ) | Yes Refl | No prf | Yes Refl = No $ (\h => prf (case h of Refl => Refl))
--- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a1 b2 c2 ) | Yes Refl | No prf1 | No prf2 = No $ (\h => prf1 (prf2 (case h of Refl => Refl)))
--- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a2 b1 c1 ) | No prf | Yes Refl | Yes Refl = No $ (\h => prf (case h of Refl => Refl))
--- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a2 b1 c2 ) | No prf1 | Yes Refl | No prf2 = No $ (\h => prf1 (prf2 (case h of Refl => Refl)))
--- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a2 b2 c1 ) | No prf1 | No prf2 | Yes Refl = No $ (\h => prf1 (prf2 (case h of Refl => Refl)))
--- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a2 b2 c2 ) | No prf1 | No prf2 | No prf3 = No $ (\h => prf1 (prf2 (prf3 (case h of Refl => Refl))))
--- -- -- -- import Data.Vect
+-- -- -- -- -- (DecEq t) => DecEq (MyVect n t) where 
+-- -- -- -- -- 	decEq MyNil MyNil = Yes Refl 
+-- -- -- -- -- 	decEq (MyCons h1 t1) (MyCons h2 t2) with (decEq h1 h2) | (decEq t1 t2) 
+-- -- -- -- -- 			decEq (MyCons h1 t1) (MyCons h1 t1) | Yes Refl | Yes Refl = Yes Refl 
+-- -- -- -- -- 			decEq (MyCons h1 t1) (MyCons h1 t2) | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- 			decEq (MyCons h1 t1) (MyCons h2 t2) | No prf | _ = No $ (\h => prf (case h of Refl => Refl))
 
--- -- -- -- import Data.Nat
+-- data List : (t : Type) -> Type where
+-- 	Nil : List t
+-- 	Cons : (head : t) -> (tail : List t) -> List t
 
--- -- -- -- import Decidable.Equality	
+-- (DecEq t) => DecEq (List t) where
+-- 	decEq Nil Nil = Yes Refl 
+-- 	decEq (Cons h1 t1) (Cons h2 t2) with (decEq h1 h2)
+-- 		decEq (Cons h1 t1) (Cons h1 t2) | Yes Refl with (decEq t1 t2)
+-- 			decEq (Cons h1 t1) (Cons h1 t1) | Yes Refl | Yes Refl = Yes Refl 
+-- 			decEq (Cons h1 t1) (Cons h1 t2) | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
+-- 		decEq (Cons h1 t1) (Cons h2 t2) | No prf = No $ (\h => prf (case h of Refl => Refl))
+-- 	decEq Nil (Cons h t) = No (\h => (case h of Refl impossible ))
+-- 	decEq (Cons h t) Nil = No (\h => (case h of Refl impossible ))
+
+-- -- -- -- -- (DecEq t) => DecEq (List t) where
+-- -- -- -- -- 	decEq Nil Nil = Yes Refl 
+-- -- -- -- -- 	decEq (Cons h1 t1) (Cons h2 t2) with (decEq h1 h2) | (decEq t1 t2)
+-- -- -- -- -- 		decEq (Cons h1 t1) (Cons h1 t1) | Yes Refl | Yes Refl = Yes Refl 
+-- -- -- -- -- 		decEq (Cons h1 t1) (Cons h2 t2) | _ | No prf = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- 		decEq (Cons h1 t1) (Cons h2 t2) | No prf | _ = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- 	decEq Nil (Cons _ _) = No (\h => (case h of Refl impossible ))
+-- -- -- -- -- 	decEq (Cons _ _) Nil = No (\h => (case h of Refl impossible ))
+
+-- (DecEq t) => DecEq (List t) where 
+-- 	decEq (Nil) (Nil) = Yes Refl
+-- 	decEq (Nil) (Cons head2 tail2) = No (\h => (case (h) of (Refl) impossible))
+-- 	decEq (Cons head1 tail1) (Nil) = No (\h => (case (h) of (Refl) impossible))
+-- 	decEq (Cons head1 tail1) (Cons head2 tail2) with (decEq head1 head2)
+-- 		decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl with (decEq tail1 tail2)
+-- 			decEq (Cons head1 tail1) (Cons head1 tail1) | Yes Refl | Yes Refl  = Yes Refl
+-- 			decEq (Cons head1 tail1) (Cons head1 tail2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- 				(Refl) => Refl)))
+-- 		decEq (Cons head1 tail1) (Cons head2 tail2) | No prf  = No (\h => (prf (case (h) of
+-- 			(Refl) => Refl)))
+
+-- data SoManyArgs : (t : Type) -> Type where 
+-- 	MyC : (a : t) -> (b : t) -> (c : t) -> (d : t) -> SoManyArgs t
+
+-- -- -- -- -- data LessArgs : (t : Type) -> Type where 
+-- -- -- -- -- 	MyC2 : (a : t) -> (b : t) -> LessArgs t
+
+-- -- -- -- -- (DecEq t) => DecEq (LessArgs t) where
+-- -- -- -- -- 	decEq (MyC2 a1 b1) (MyC2 a2 b2) with (decEq a1 a2)
+-- -- -- -- -- 		decEq (MyC2 a1 b1) (MyC2 a1 b2) | Yes Refl with (decEq b1 b2) 
+-- -- -- -- -- 			decEq (MyC2 a1 b1) (MyC2 a1 b1) | Yes Refl | Yes Refl = Yes Refl 
+-- -- -- -- -- 			decEq (MyC2 a1 b1) (MyC2 a1 b2) | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- 		decEq (MyC2 a1 b1) (MyC2 a2 b2) | No prf = No $ (\h => prf (case h of Refl => Refl))
+
+-- -- -- -- -- (DecEq t) => DecEq (LessArgs t) where 
+-- -- -- -- -- 	decEq (MyC2 a1 b1) (MyC2 a2 b2) with (decEq a1 a2)
+-- -- -- -- -- 		decEq (MyC2 a1 b1) (MyC2 a1 b2) | Yes Refl  with (decEq b1 b2)
+-- -- -- -- -- 			decEq (MyC2 a1 b1) (MyC2 a1 b1) | Yes Refl | Yes Refl  = Yes Refl
+-- -- -- -- -- 			decEq (MyC2 a1 b1) (MyC2 a1 b2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- -- 				(Refl) => Refl)))
+-- -- -- -- -- 		decEq (MyC2 a1 b1) (MyC2 a2 b2) | No prf  = No (\h => (prf (case (h) of
+-- -- -- -- -- 			(Refl) => Refl)))
+
+-- -- -- -- -- (DecEq t) => DecEq (SoManyArgs t) where
+-- -- -- -- -- 	decEq (MyC a1 b1 c1) (MyC a2 b2 c2) with (decEq a1 a2)
+-- -- -- -- -- 		decEq (MyC a1 b1 c1) (MyC a1 b2 c2) | Yes Refl with (decEq b1 b2) 
+-- -- -- -- -- 			decEq (MyC a1 b1 c1) (MyC a1 b1 c2) | Yes Refl | Yes Refl with (decEq c1 c2)
+-- -- -- -- -- 				decEq (MyC a1 b1 c1) (MyC a1 b1 c1) | Yes Refl | Yes Refl | Yes Refl = Yes Refl 
+-- -- -- -- -- 				decEq (MyC a1 b1 c1) (MyC a1 b1 c2) | Yes Refl | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- 			decEq (MyC a1 b1 c1) (MyC a1 b2 c2) | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- 		decEq (MyC a1 b1 c1) (MyC a2 b2 c2) | No prf = No $ (\h => prf (case h of Refl => Refl))
+
+-- (DecEq t) => DecEq (SoManyArgs t) where 
+-- 	decEq (MyC a1 b1 c1 d1) (MyC a2 b2 c2 d2) with (decEq a1 a2)
+-- 		decEq (MyC a1 b1 c1 d1) (MyC a1 b2 c2 d2) | Yes Refl  with (decEq b1 b2)
+-- 			decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c2 d2) | Yes Refl | Yes Refl  with (decEq c1 c2)
+-- 				decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c1 d2) | Yes Refl | Yes Refl | Yes Refl  with (decEq d1 d2)
+-- 					decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c1 d1) | Yes Refl | Yes Refl | Yes Refl | Yes Refl  = Yes Refl
+-- 					decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c1 d2) | Yes Refl | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- 						(Refl) => Refl)))
+-- 				decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c2 d2) | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- 					(Refl) => Refl)))
+-- 			decEq (MyC a1 b1 c1 d1) (MyC a1 b2 c2 d2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+-- 				(Refl) => Refl)))
+-- 		decEq (MyC a1 b1 c1 d1) (MyC a2 b2 c2 d2) | No prf  = No (\h => (prf (case (h) of
+-- 			(Refl) => Refl)))
+
+-- -- -- -- -- (DecEq t) => DecEq (SoManyArgs t) where
+-- -- -- -- -- 	decEq (MyC a1 b1 c1) (MyC a2 b2 c2) with (decEq a1 a2) | (decEq b1 b2) | (decEq c1 c2)
+-- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a1 b1 c1 ) | Yes Refl | Yes Refl | Yes Refl = Yes Refl 
+-- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a1 b1 c2 ) | Yes Refl | Yes Refl | No prf  = No $ (\h => prf (case h of Refl => Refl)) 
+-- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a1 b2 c1 ) | Yes Refl | No prf | Yes Refl = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a1 b2 c2 ) | Yes Refl | No prf1 | No prf2 = No $ (\h => prf1 (prf2 (case h of Refl => Refl)))
+-- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a2 b1 c1 ) | No prf | Yes Refl | Yes Refl = No $ (\h => prf (case h of Refl => Refl))
+-- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a2 b1 c2 ) | No prf1 | Yes Refl | No prf2 = No $ (\h => prf1 (prf2 (case h of Refl => Refl)))
+-- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a2 b2 c1 ) | No prf1 | No prf2 | Yes Refl = No $ (\h => prf1 (prf2 (case h of Refl => Refl)))
+-- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a2 b2 c2 ) | No prf1 | No prf2 | No prf3 = No $ (\h => prf1 (prf2 (prf3 (case h of Refl => Refl))))
+-- -- -- -- -- import Data.Vect
+
+-- -- -- -- -- import Data.Nat
+
+-- -- -- -- -- import Decidable.Equality	
 	
 
--- -- -- -- search : (n : Nat) -> (ls : Vect n Nat) -> (x : Nat) -> Maybe (Fin n)
--- -- -- -- search n ls x = 
--- -- -- -- 	let i : Nat = 0 in
--- -- -- -- 		let ret : Maybe (Fin n) = Nothing in
--- -- -- -- 			(search_rec0 n ls x i ret)
--- -- -- -- where 
--- -- -- -- 	search_rec0 : (n : Nat) -> (ls : Vect n Nat) -> (x : Nat) -> (i : Nat) -> (ret : Maybe (Fin n)) -> Maybe (Fin n)
--- -- -- -- 	search_rec0 n ls x i ret = 
--- -- -- -- 		case ((isLT i n)) of
--- -- -- -- 			(No noprf) => ret
--- -- -- -- 			(Yes yesprf) => case ((decEq (index (natToFinLT i) ls) x)) of
--- -- -- -- 				(Yes yesprf) => let i : Nat = (S i) in
--- -- -- -- 					(search_rec0 n ls x i ret)
--- -- -- -- 				(No noprf) => let ret : Maybe (Fin n) = (Just (natToFinLT i)) in
--- -- -- -- 					let i : Nat = (S i) in
--- -- -- -- 						(search_rec0 n ls x i ret)
+-- -- -- -- -- search : (n : Nat) -> (ls : Vect n Nat) -> (x : Nat) -> Maybe (Fin n)
+-- -- -- -- -- search n ls x = 
+-- -- -- -- -- 	let i : Nat = 0 in
+-- -- -- -- -- 		let ret : Maybe (Fin n) = Nothing in
+-- -- -- -- -- 			(search_rec0 n ls x i ret)
+-- -- -- -- -- where 
+-- -- -- -- -- 	search_rec0 : (n : Nat) -> (ls : Vect n Nat) -> (x : Nat) -> (i : Nat) -> (ret : Maybe (Fin n)) -> Maybe (Fin n)
+-- -- -- -- -- 	search_rec0 n ls x i ret = 
+-- -- -- -- -- 		case ((isLT i n)) of
+-- -- -- -- -- 			(No noprf) => ret
+-- -- -- -- -- 			(Yes yesprf) => case ((decEq (index (natToFinLT i) ls) x)) of
+-- -- -- -- -- 				(Yes yesprf) => let i : Nat = (S i) in
+-- -- -- -- -- 					(search_rec0 n ls x i ret)
+-- -- -- -- -- 				(No noprf) => let ret : Maybe (Fin n) = (Just (natToFinLT i)) in
+-- -- -- -- -- 					let i : Nat = (S i) in
+-- -- -- -- -- 						(search_rec0 n ls x i ret)

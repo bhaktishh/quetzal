@@ -65,5 +65,5 @@ main' = do
 main : IO t
 main = do 
     let this = initStore 
-    (t, thisConc) <- run st main
+    (t, thisConc) <- run st main'
     pure t
