@@ -57,7 +57,6 @@ data PTm
   | PTmWildCard
   | PTmTernary PTm PTm PTm
   | PTmCon String (List PTm)
-  | PTmFunc Func
   | PTmFuncCall PTm (List PTm)
   | PTmIf PTm PTm PTm
   deriving (Show, Eq, Ord)
@@ -110,7 +109,6 @@ data Stmt
   | StSwitch Switch
   | StSkip
   | StDot PTm PTm (List PTm)
-  | StIODot PTm (List PTm)
   deriving (Show, Eq, Ord)
 
 data Eff = IO | Other deriving (Show, Eq, Ord)
@@ -176,7 +174,7 @@ data DirectiveTy
   | DInit
   | DRun
       { directiveReturns :: (PTy, Maybe String),
-        directiveWith :: (String, PTm), -- eg with this = mkStore("secret", "pub")
+        directiveWith :: PTm, -- eg with this = mkStore("secret", "pub")
         directiveStTrans :: (PTm, PTm)
       }
   deriving (Show, Eq, Ord)

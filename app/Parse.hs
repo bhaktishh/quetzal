@@ -22,6 +22,16 @@ import Text.Megaparsec
     (<|>),
   )
 import Text.Megaparsec.Char
+    ( alphaNumChar,
+      char,
+      digitChar,
+      letterChar,
+      lowerChar,
+      space,
+      upperChar,
+      string )
+
+-- TODO parse lists 
 
 type Parser = Parsec Void String
 
@@ -41,7 +51,9 @@ reserved =
     "switch",
     "Ty",
     "FSM",
-    "action"
+    "action",
+    "init",
+    "run"
   ]
 
 pSpaces :: Parser a -> Parser a
@@ -182,7 +194,7 @@ pDRun = do
   _ <- pSpaces $ string "#run"
   directiveSub <- pSpaces pDirectiveSub
   directiveReturns <- try (string "returns" >> (,) <$> pSpaces pPTy <*> optional (pSpaces pLowerStr)) <|> pure (PTyUnit, Nothing)
-  directiveWith <- pSpaces (string "with") >> ((,) <$> (pSpaces pPTmThis >> pSpaces (char '=') >> pure "this") <*> pPTm)
+  directiveWith <- pSpaces (string "with") >> pSpaces (string "this") >> pSpaces (char '=') >> pPTm
   directiveStTrans <- pSpaces pStTrans
   pure $
     Directive
@@ -546,7 +558,7 @@ pStDot = do
   _ <- pSpaces $ char ';'
   case t1 of
     Just ty -> pure $ StDot ty f xs
-    Nothing -> pure $ StIODot f xs
+    Nothing -> pure $ StDot PTmIO f xs
 
 pDefault :: Parser Case
 pDefault = do
@@ -657,8 +669,8 @@ pPTm1 =
 pPTm0 :: Parser PTm
 pPTm0 =
   try (pParens pPTm1)
-    <|> try pPTmVar
     <|> try pPTmThis
+    <|> try pPTmVar
     <|> try pPTmWildCard
     <|> try pNat
     <|> try pBool

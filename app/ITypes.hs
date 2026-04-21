@@ -126,5 +126,5 @@ data ITmDo = ITmDoLet String (Maybe ITy) ITm
             | ITmDoCase (List ITm) (List (List ITm, ITm))
             | ITmDoPure ITm
             | ITmDoIf ITm ITm ITm
-            | ITmDoIO ITm
+            | ITmDoTm ITm -- arbitrary do terms 
              deriving (Show, Eq)

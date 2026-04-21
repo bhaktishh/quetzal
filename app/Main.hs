@@ -23,8 +23,7 @@ import Unparse
 main :: IO ()
 main = do
   [inpf, outpf] <- getArgs
-  prg <- processFile inpf outpf
-  pure ()
+  processFile inpf outpf
 
 -- -- parsing utils
 parseFromFile p file = runParser p file <$> readFile file
@@ -36,16 +35,15 @@ processFile inpf outpf = do
     Left _ -> error "wtf"
     Right prg' -> do
       let kvs = foldr mkFSMs M.empty (getFuncs prg')
-          prg = (PFSM <$> M.elems kvs) ++ prg'
-      print prg
+          prg = prg' ++ (PFSM <$> M.elems kvs)
+          iprg = IIImport "Decidable.Equality" : map trProgEl prg
+      writeIdris iprg outpf
 
--- writeIdris (map doFuncs prg) outpf
-
-doFuncs :: ProgEl -> IProgEl
-doFuncs (PFunc f) = IIFunc $ trFunc f M.empty
-doFuncs (PDecl x) = IIDecl $ trDecl x
-doFuncs (PImport x) = IIImport x
-doFuncs (PFSM fsm) = IIFSM $ trFSM fsm
+trProgEl :: ProgEl -> IProgEl
+trProgEl (PFunc f) = IIFunc $ trFunc f M.empty
+trProgEl (PDecl x) = IIDecl $ trDecl x
+trProgEl (PImport x) = IIImport x
+trProgEl (PFSM fsm) = IIFSM $ trFSM fsm
 
 writeIdris :: IProg -> String -> IO ()
 writeIdris p fpath = writeFile fpath (unparse p)

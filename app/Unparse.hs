@@ -75,7 +75,7 @@ uRecDecl
 
 uRecDeclField :: IAnnParam -> Indent String
 uRecDeclField (IAnnParam (var, ty) _) = do
-  t <- uTy ty
+  t <- uTy False ty
   pure $ "\t" ++ var ++ " : " ++ t ++ "\n"
 
 uTyDecl :: ITyDecl -> Indent String
@@ -85,8 +85,11 @@ uTyDecl
       iTyDeclParams,
       iTyDeclConstructors
     } = do
+    (ind, t) <- get
     params <- mapM (uAnnParam True) iTyDeclParams
+    put (ind + 1, True)
     constructors <- mapM uTyDeclConstructor iTyDeclConstructors
+    put (ind, t)
     pure $
       "data"
         ++ " "
@@ -99,8 +102,9 @@ uTyDecl
 uTyDeclConstructor :: IConstructor -> Indent String
 uTyDeclConstructor IConstructor {iConName, iConArgs, iConTy} =
   do
+    (ind, t) <- get
     params <- mapM (uAnnParam True) iConArgs
-    ty <- uTy iConTy
+    ty <- uTy False iConTy
     pure $
       "\t"
         ++ iConName
@@ -113,249 +117,264 @@ uAnnParam :: Bool -> IAnnParam -> Indent String
 uAnnParam arrow (IAnnParam (var, ty) vis) = do
   (ind, tt) <- get
   put (ind, False)
-  t <- uTy ty
+  t <- uTy False ty
   put (ind, tt)
   pure $ (if vis then "(" else "{") ++ (if var /= "" then var ++ " : " else "") ++ t ++ (if vis then ")" else "}") ++ (if arrow then " -> " else " ")
 
-uTy :: ITy -> Indent String
-uTy ITyNat = pure "Nat"
-uTy ITyBool = pure "Bool"
-uTy ITyTy = pure "Type"
-uTy ITyUnit = pure "()"
-uTy (ITyApp name params) = do
+-- b : Bool = putParens?
+uTy :: Bool -> ITy -> Indent String
+uTy _ ITyNat = pure "Nat"
+uTy _ ITyBool = pure "Bool"
+uTy _ ITyTy = pure "Type"
+uTy _ ITyUnit = pure "()"
+uTy _ (ITyApp name params) = do
   (ind, t) <- get
   put (ind, False)
-  params <- mapM uTm params
-  name <- uTy name
+  params <- mapM (uTm True) params
+  name <- uTy False name
   put (ind, t)
-  pure $ name ++ " " ++ unwords params
-uTy (ITyFunc args) = do
+  pure $ name ++ (if null params then "" else " " ++ unwords params)
+uTy _ (ITyFunc args) = do
   args <- mapM uFuncArg args
   pure $ intercalate " -> " args
-uTy (ITyTm t) = uTm t
-uTy (ITyList t) = (++) "List " <$> uTy t
-uTy ITyHole = pure "?"
-uTy (ITyPair t1 t2) = do
+uTy b (ITyTm t) = uTm b t
+uTy _ (ITyList t) = (++) "List " <$> uTy True t
+uTy _ ITyHole = pure ""
+uTy _ (ITyPair t1 t2) = do
   (ind, t) <- get
   put (ind, False)
-  t1' <- uTy t1
-  t2' <- uTy t2
-  pure $ indent t ind ++ "(" ++ t1' ++ "," ++ t2' ++ ")"
-uTy (ITyIO ty) = do
+  t1' <- uTy False t1
+  t2' <- uTy False t2
+  pure $ indent t ind ++ putParens True (t1' ++ ", " ++ t2')
+uTy _ (ITyIO ty) = do
   (ind, t) <- get
   put (ind, False)
-  ty' <- uTy ty
+  ty' <- uTy True ty
   pure $ indent t ind ++ "IO " ++ ty'
-uTy (ITyVar v) = do
+uTy _ (ITyVar v) = do
   (ind, t) <- get
   put (ind, False)
   pure $ indent t ind ++ v
 
 uFuncArg :: (Maybe String, ITy) -> Indent String
-uFuncArg (Nothing, ty) = uTy ty
-uFuncArg (Just v, ty) = uTy ty >>= \x -> pure $ "(" ++ v ++ " : " ++ x ++ ")"
+uFuncArg (Nothing, ty) = uTy False ty
+uFuncArg (Just v, ty) = uTy False ty >>= \x -> pure $ "(" ++ v ++ " : " ++ x ++ ")"
 
-uTm :: ITm -> Indent String
-uTm (ITmNat n) = do
+uTm :: Bool -> ITm -> Indent String
+uTm _ (ITmNat n) = do
   (ind, t) <- get
   put (ind, False)
   pure $ indent t ind ++ show n
-uTm (ITmString s) = do
+uTm _ (ITmString s) = do
   (ind, t) <- get
   put (ind, False)
   pure $ indent t ind ++ "\"" ++ s ++ "\""
-uTm (ITmDot a b) = do
+uTm _ (ITmDot a f) = do
   (ind, t) <- get
   put (ind, False)
-  a' <- uTm a
-  b' <- uTm b
+  a' <- uTm False a
+  f' <- uTm False f
   put (ind, t)
-  pure $ indent t ind ++ a' ++ "." ++ b'
-uTm ITmWildCard = do
+  pure $ indent t ind ++ a' ++ "." ++ f'
+uTm _ ITmWildCard = do
   (ind, t) <- get
   put (ind, False)
   pure $ indent t ind ++ "_"
-uTm (ITmBool b) = do
+uTm _ (ITmBool b') = do
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ show b
-uTm (ITmPlus n1 n2) = do
+  pure $ indent t ind ++ show b'
+uTm b (ITmPlus n1 n2) = do
   (ind, t) <- get
   put (ind, False)
-  t1 <- uTm n1
-  t2 <- uTm n2
-  pure $ indent t ind ++ "(" ++ t1 ++ " + " ++ t2 ++ ")"
-uTm (ITmMinus n1 n2) = do
-  t1 <- uTm n1
-  t2 <- uTm n2
+  t1 <- uTm True n1
+  t2 <- uTm True n2
+  pure $ indent t ind ++ putParens b (t1 ++ " + " ++ t2)
+uTm b (ITmMinus n1 n2) = do
+  t1 <- uTm True n1
+  t2 <- uTm True n2
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ "(" ++ t1 ++ " - " ++ t2 ++ ")"
-uTm (ITmMod n1 n2) = do
-  t1 <- uTm n1
-  t2 <- uTm n2
+  pure $ indent t ind ++ putParens b (t1 ++ " - " ++ t2)
+uTm b (ITmMod n1 n2) = do
+  t1 <- uTm True n1
+  t2 <- uTm True n2
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ "(" ++ t1 ++ " % " ++ t2 ++ ")"
-uTm (ITmMult n1 n2) = do
-  t1 <- uTm n1
-  t2 <- uTm n2
+  pure $ indent t ind ++ putParens b (t1 ++ " % " ++ t2)
+uTm b (ITmMult n1 n2) = do
+  t1 <- uTm True n1
+  t2 <- uTm True n2
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ "(" ++ t1 ++ " * " ++ t2 ++ ")"
-uTm (ITmDiv n1 n2) = do
-  t1 <- uTm n1
-  t2 <- uTm n2
+  pure $ indent t ind ++ putParens b (t1 ++ " * " ++ t2)
+uTm b (ITmDiv n1 n2) = do
+  t1 <- uTm True n1
+  t2 <- uTm True n2
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ "(" ++ t1 ++ " / " ++ t2 ++ ")"
-uTm (ITmBEq n1 n2) = do
-  t1 <- uTm n1
-  t2 <- uTm n2
+  pure $ indent t ind ++ putParens b (t1 ++ " / " ++ t2)
+uTm b (ITmBEq n1 n2) = do
+  t1 <- uTm False n1
+  t2 <- uTm False n2
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ "(" ++ t1 ++ " == " ++ t2 ++ ")"
-uTm (ITmBOr n1 n2) = do
-  t1 <- uTm n1
-  t2 <- uTm n2
+  pure $ indent t ind ++ putParens b (t1 ++ " == " ++ t2)
+uTm b (ITmBOr n1 n2) = do
+  t1 <- uTm True n1
+  t2 <- uTm True n2
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ "(" ++ t1 ++ " || " ++ t2 ++ ")"
-uTm (ITmBAnd n1 n2) = do
-  t1 <- uTm n1
-  t2 <- uTm n2
+  pure $ indent t ind ++ putParens b (t1 ++ " || " ++ t2)
+uTm b (ITmBAnd n1 n2) = do
+  t1 <- uTm True n1
+  t2 <- uTm True n2
   (ind, t) <- get
   put (ind, False)
-  pure $ indent t ind ++ "(" ++ t1 ++ " && " ++ t2 ++ ")"
-uTm (ITmBLT n1 n2) = do
-  t1 <- uTm n1
-  t2 <- uTm n2
+  pure $ indent t ind ++ putParens b (t1 ++ " && " ++ t2)
+uTm b (ITmBLT n1 n2) = do
+  t1 <- uTm False n1
+  t2 <- uTm False n2
   (ind, t) <- get
   put (ind, False)
-  -- pure $ indent t ind ++ "(" ++ "isLT " ++ t1 ++ " " ++ t2 ++ ")"
-  pure $ indent t ind ++ "(" ++ t1 ++ " < " ++ t2 ++ ")"
-uTm (ITmVar v) = do
+  pure $ indent t ind ++ putParens b (t1 ++ " < " ++ t2)
+uTm _ (ITmVar v) = do
   (ind, t) <- get
   put (ind, False)
   pure $ indent t ind ++ v
-uTm (ITmFuncCall f args) = do
+uTm b (ITmFuncCall f args) = do
   (ind, t) <- get
   put (ind, False)
-  tm <- uTm f
-  args <- mapM uTm args
-  pure $ indent t ind ++ "(" ++ tm ++ (if null args then "" else " ") ++ unwords args ++ ")"
-uTm (ITmCon c args) = do
+  tm <- uTm False f
+  args <- mapM (uTm True) args
+  pure $ indent t ind ++ putParens (b && not (null args)) (tm ++ (if null args then "" else " ") ++ unwords args)
+uTm b (ITmCon c args) = do
   (ind, t) <- get
   put (ind, False)
-  args <- mapM uTm args
-  pure $ indent t ind ++ "(" ++ c ++ (if null args then "" else " ") ++ unwords args ++ ")"
-uTm (ITmIf cond thenCase elseCase) = do
+  args <- mapM (uTm True) args
+  pure $ indent t ind ++ putParens (b && not (null args)) (c ++ (if null args then "" else " ") ++ unwords args)
+uTm b (ITmIf cond thenCase elseCase) = do
   (ind, t) <- get
   put (ind, False)
-  cond <- uTm cond
+  cond <- uTm False cond
   put (ind + 1, True)
-  thenCase <- uTm thenCase
+  thenCase <- uTm False thenCase
   put (ind + 1, True)
-  elseCase <- uTm elseCase
+  elseCase <- uTm False elseCase
   put (ind, False)
-  pure $ indent t ind ++ "if " ++ cond ++ " then \n" ++ thenCase ++ "\n" ++ indent t ind ++ "else \n" ++ elseCase
-uTm ITmUnit = do
+  pure $ indent t ind ++ putParens b ("if " ++ cond ++ " then \n" ++ thenCase ++ "\n" ++ indent t ind ++ "else \n" ++ elseCase)
+uTm _ ITmUnit = do
   (ind, t) <- get
   pure $ indent t ind ++ "()"
-uTm (ITmTy t) = do
+uTm b (ITmTy t) = do
   (ind, _) <- get
   put (ind, False)
-  uTy t
-uTm (ITmFunc f) = uFuncs f
-uTm (ITmNot tm) = do
+  uTy b t
+uTm _ (ITmFunc f) = uFuncs f
+uTm b (ITmNot tm) = do
   (ind, t) <- get
   put (ind, False)
-  tm <- uTm tm
-  pure $ indent t ind ++ "not " ++ tm
-uTm (ITmLet v Nothing val body) = do
+  tm <- uTm True tm
+  pure $ indent t ind ++ putParens b ("not " ++ tm)
+uTm b (ITmLet v Nothing val body) = do
   (ind, t) <- get
   put (ind, False)
-  tm <- uTm val
+  tm <- uTm False val
   put (ind + 1, True)
-  b <- uTm body
+  bd <- uTm False body
   put (ind, False)
-  pure $ indent t ind ++ "let " ++ v ++ " = " ++ tm ++ " in\n" ++ b
-uTm (ITmLet v (Just ty) val body) = do
+  pure $ indent t ind ++ putParens b ("let " ++ v ++ " = " ++ tm ++ " in\n" ++ bd)
+uTm b (ITmLet v (Just ty) val body) = do
   (ind, t) <- get
   put (ind, False)
-  ty <- uTy ty
-  tm <- uTm val
+  ty <- uTy False ty
+  tm <- uTm False val
   put (ind + 1, True)
-  b <- uTm body
+  bd <- uTm False body
   put (ind, False)
-  pure $ indent t ind ++ "let " ++ v ++ " : " ++ ty ++ " = " ++ tm ++ " in\n" ++ b
-uTm (ITmMatch on cases) = do
+  pure $ indent t ind ++ putParens b ("let " ++ v ++ " : " ++ ty ++ " = " ++ tm ++ " in\n" ++ bd)
+uTm b (ITmMatch on cases) = do
   (ind, t) <- get
   put (ind, False)
-  on <- mapM uTm on
+  on <- mapM (uTm False) on
   put (ind + 1, True)
   cases <-
     mapM
       ( \(xs, v) -> do
           (ind, t) <- get
           put (ind, False)
-          xs <- mapM uTm xs
+          xs <- mapM (uTm False) xs
           put (ind, False)
-          v <- uTm v
+          v <- uTm False v
           pure (xs, v)
       )
       cases
   put (ind, t)
   pure $
     indent t ind
-      ++ "(case "
-      ++ "("
-      ++ intercalate "," on
-      ++ ")"
-      ++ " of\n"
-      ++ indent True (ind + 1)
-      ++ intercalate
-        ("\n" ++ indent True (ind + 1))
-        (map (\(xs, tm) -> "(" ++ intercalate "," xs ++ ")" ++ " => " ++ tm) cases)
-      ++ ")"
-uTm (ITmMatchImpossible on cases) = do
+      ++ putParens
+        b
+        ( "case "
+            ++ ( if length on < 2
+                   then concat on
+                   else
+                     putParens True (intercalate "," on)
+               )
+            ++ " of\n"
+            ++ (if null cases then "" else indent True (ind + 1))
+            ++ intercalate
+              ("\n" ++ indent True (ind + 1))
+              (map (\(xs, tm) -> (if length xs < 2 then concat xs else putParens True (intercalate "," xs)) ++ " => " ++ tm) cases)
+        )
+uTm b (ITmMatchImpossible on cases) = do
   (ind, t) <- get
   put (ind, False)
-  on <- mapM uTm on
-  cases <- mapM uTm cases
+  on <- mapM (uTm False) on
+  cases <- mapM (uTm b) cases
   pure $
     indent t ind
-      ++ "(case "
-      ++ "("
-      ++ intercalate "," on
-      ++ ")"
-      ++ " of "
-      ++ "("
-      ++ intercalate "," cases
-      ++ ")"
-      ++ " impossible"
-      ++ ")"
-uTm (ITmList t l) = undefined
-uTm (ITmLam v tm) = do
+      ++ putParens
+        b
+        ( "case "
+            ++ ( if length on < 2
+                   then concat on
+                   else
+                     putParens b (intercalate "," on)
+               )
+            ++ " of "
+            ++ ( if length cases < 2
+                   then concat cases
+                   else
+                     putParens b (intercalate ", " cases)
+               )
+            ++ " impossible"
+        )
+uTm _ (ITmList _ l) = do
   (ind, t) <- get
   put (ind, False)
-  vs <- mapM uTm v
-  tm <- uTm tm
+  ls <- mapM (uTm False) l
   put (ind, t)
-  pure $ indent t ind ++ putParens ("\\" ++ putParens (intercalate ", " vs) ++ " => " ++ tm) -- todo check
-uTm (ITmPair t1 t2) = do
+  pure $ indent t ind ++ "[" ++ intercalate "," ls ++ "]"
+uTm _ (ITmLam v tm) = do
   (ind, t) <- get
   put (ind, False)
-  t1' <- uTm t1
-  t2' <- uTm t2
-  pure $ indent t ind ++ putParens (t1' ++ "," ++ t2')
-uTm (ITmBind t1 t2) = do
+  vs <- mapM (uTm False) v
+  tm <- uTm False tm
+  put (ind, t)
+  pure $ indent t ind ++ putParens True ("\\" ++ (if length vs < 2 then concat vs else putParens True (intercalate ", " vs)) ++ " => " ++ tm) -- todo check
+uTm _ (ITmPair t1 t2) = do
   (ind, t) <- get
   put (ind, False)
-  t1' <- uTm t1
-  t2' <- uTm t2
-  pure $ indent t ind ++ putParens t1' ++ " >>= " ++ putParens t2'
-uTm (ITmDo d) = do
+  t1' <- uTm False t1
+  t2' <- uTm False t2
+  pure $ indent t ind ++ putParens True (t1' ++ ", " ++ t2')
+uTm b (ITmBind t1 t2) = do
+  (ind, t) <- get
+  put (ind, False)
+  t1' <- uTm False t1
+  t2' <- uTm False t2
+  pure $ indent t ind ++ putParens b (t1' ++ " >>= " ++ t2')
+uTm _ (ITmDo d) = do
   (ind, t) <- get
   put (ind + 1, True)
   dos <- mapM uTmDo d
@@ -363,67 +382,76 @@ uTm (ITmDo d) = do
   pure $ indent t ind ++ "do \n" ++ intercalate "\n" dos
 
 uTmDo :: ITmDo -> Indent String
-uTmDo (ITmDoLet v ty x) = do
+uTmDo (ITmDoLet v (Just ty') x) = do
   (ind, t) <- get
   put (ind, False)
-  ty <- uTy (fromMaybe ITyHole ty)
-  tm <- uTm x
+  ty <- uTy False ty'
+  tm <- uTm False x
   put (ind, t)
   pure $ indent t ind ++ "let " ++ v ++ " : " ++ ty ++ " = " ++ tm
+uTmDo (ITmDoLet v Nothing x) = do
+  (ind, t) <- get
+  put (ind, False)
+  tm <- uTm False x
+  put (ind, t)
+  pure $ indent t ind ++ "let " ++ v ++ " = " ++ tm
 uTmDo (ITmDoBind xs x) = do
   (ind, t) <- get
   put (ind, False)
-  tm <- uTm x
-  xs' <- mapM uTm xs
+  tm <- uTm False x
+  xs' <- mapM (uTm False) xs
   put (ind, t)
-  pure $ indent t ind ++ putParens (intercalate "," xs') ++ " <- " ++ tm
+  pure $ indent t ind ++ (if length xs' < 2 then concat xs' else putParens True (intercalate "," xs')) ++ " <- " ++ tm
 uTmDo (ITmDoCase ons branches) = do
   (ind, t) <- get
   put (ind, False)
-  on <- mapM uTm ons
+  on <- mapM (uTm False) ons
   put (ind + 1, True)
   cases <-
     mapM
       ( \(xs, v) -> do
           (ind, t) <- get
           put (ind, False)
-          xs <- mapM uTm xs
+          xs <- mapM (uTm False) xs
           put (ind, False)
-          v <- uTm v
+          v <- uTm False v
           pure (xs, v)
       )
       branches
   put (ind, t)
   pure $
     indent t ind
-      ++ "(case "
-      ++ "("
-      ++ intercalate "," on
-      ++ ")"
+      ++ "case "
+      ++ ( if length on < 2
+             then concat on
+             else
+               putParens True (intercalate ", " on)
+         )
       ++ " of\n"
       ++ indent True (ind + 1)
       ++ intercalate
         ("\n" ++ indent True (ind + 1))
-        (map (\(xs, tm) -> "(" ++ intercalate "," xs ++ ")" ++ " => " ++ tm) cases)
-      ++ ")"
+        (map (\(xs, tm) -> (if length xs < 2 then concat xs else putParens True (intercalate "," xs)) ++ " => " ++ tm) cases)
 uTmDo (ITmDoPure tm) = do
   (ind, t) <- get
   put (ind, False)
-  tm' <- uTm tm
+  tm' <- uTm True tm
   put (ind, t)
   pure $ indent t ind ++ "pure " ++ tm'
-uTmDo (ITmDoIf c t e) = do
-  (ind, b) <- get
-  put (ind, False)
-  c' <- uTm c
-  t' <- uTm t
-  e' <- uTm e
-  put (ind, b)
-  pure $ indent b ind ++ "if " ++ putParens c' ++ " then " ++ putParens t' ++ " else " ++ putParens e'
-uTmDo (ITmDoIO tm) = do
+uTmDo (ITmDoIf c th e) = do
   (ind, t) <- get
   put (ind, False)
-  tm' <- uTm tm
+  c' <- uTm False c
+  put (ind + 1, True)
+  t' <- uTm False th
+  put (ind + 1, True)
+  e' <- uTm False e
+  put (ind, False)
+  pure $ indent t ind ++ "if " ++ c' ++ " then\n" ++ t' ++ " else\n" ++ e'
+uTmDo (ITmDoTm tm) = do
+  (ind, t) <- get
+  put (ind, False)
+  tm' <- uTm False tm
   put (ind, t)
   pure $ indent t ind ++ tm'
 
@@ -431,17 +459,17 @@ uFuncs :: IFunc -> Indent String
 uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
   (ind, t) <- get
   put (ind, False)
-  retty <- uTy iFuncRetTy
+  retty <- uTy False iFuncRetTy
   args <- mapM (uAnnParam True) iFuncArgs
   -- put (ind + 1, True)
-  bodies <- mapM (\(l, body) -> (,) <$> uTm l <*> uTm body) iFuncBody
+  bodies <- mapM (\(l, body) -> (,) <$> uTm False l <*> uTm False body) iFuncBody
   -- put (ind, False)
   deps <-
     mapM
       ( \i -> do
           (ind, t) <- get
           put (ind + 1, True)
-          uTm i
+          uTm False i
       )
       iWhere
   put (ind, False)
@@ -454,11 +482,6 @@ uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
       ++ "\n"
       ++ indent t ind
       ++ intercalate "\n" (map (\(l, body) -> l ++ " = " ++ body) bodies)
-      -- ++ iFuncName
-      -- ++ " "
-      -- ++ unwords (map (\(IAnnParam (v, _) _) -> v) (filter (\(IAnnParam (_, _) vis) -> vis) iFuncArgs))
-      -- ++ " = \n"
-      -- ++ body
       ++ if null deps
         then ""
         else
@@ -471,17 +494,17 @@ uImplementation Impl {iImplicits, iConstraints, iSubject, iBody} = do
   (ind, t) <- get
   put (ind, False)
   implicits <- mapM (uAnnParam True) iImplicits
-  constraints <- mapM uTm iConstraints
-  subject <- uTm iSubject
+  constraints <- mapM (uTm False) iConstraints
+  subject <- uTm True iSubject
   put (ind + 1, True)
   body <- mapM uImplCase iBody
   pure $
     indent t ind
       ++ concat implicits
-      ++ intercalate " => " (map putParens constraints)
+      ++ intercalate " => " constraints
       ++ (if not (null constraints) then " => " else "")
       ++ "DecEq "
-      ++ putParens subject
+      ++ subject
       ++ " where \n"
       ++ intercalate "\n" body
 
@@ -493,11 +516,11 @@ uImplCase :: IImplCase -> Indent String
 uImplCase IImplCase {iArgs, iBarArgs, iWith, iCaseBody} = do
   (ind, t) <- get
   put (ind, False)
-  t1 <- uTm (fst iArgs)
-  t2 <- uTm (snd iArgs)
-  barArgs <- mapM uTm iBarArgs
+  t1 <- uTm True (fst iArgs)
+  t2 <- uTm True (snd iArgs)
+  barArgs <- mapM (uTm False) iBarArgs
   let barArgs' = concatMap (" | " ++) barArgs
-  w <- mapM uTm iWith
+  w <- mapM (uTm True) iWith
   let w' = doWith w
   body <- uImplCaseBody iCaseBody
   (ind, t) <- get
@@ -508,7 +531,7 @@ uImplCaseBody :: IImplCaseBody -> Indent String
 uImplCaseBody (Tm tm) = do
   (ind, t) <- get
   put (ind, False)
-  tm' <- uTm tm
+  tm' <- uTm False tm
   put (ind, t)
   pure $ " = " ++ tm'
 uImplCaseBody (Nest tms) = do
@@ -518,5 +541,5 @@ uImplCaseBody (Nest tms) = do
   put (ind, True)
   pure $ intercalate "\n" tms
 
-putParens :: String -> String
-putParens s = "(" ++ s ++ ")"
+putParens :: Bool -> String -> String
+putParens b s = if b then "(" ++ s ++ ")" else s
