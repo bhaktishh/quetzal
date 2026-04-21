@@ -34,15 +34,20 @@ type Vect<Ty t>(Nat n) {
 ### A simple student record
 
 ```
-record Student {
+record Student with constructor MkStudent {
     String name; 
     Nat age;     
 }
 ```
 
+construction: 
+```
+MkStudent("name", 12)
+```
+
 ### A dependent pair as a record
 ```
-record DPairRec(Ty t, Func(t a => Ty) p) {
+record DPairRec(Ty t, Func(t a => Ty) p) with constructor MkDPair {
     t fst; 
     p(fst) snd;
 }
@@ -188,7 +193,7 @@ type LoginResult {
     constructor BadPassword;
 }
 
-record Store {
+record Store with constructor MkStore {
     String secret;
     String pub; 
 }
