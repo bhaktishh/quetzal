@@ -5,7 +5,7 @@
 
 <ty-decl> := "type" <u-ident> [ "<" <ty-params> ">" ] [ "(" <ty-params> ")" ] "{" { <cnstr-decl> } "}"
 <cnstr-decl> := "constructor" <u-ident> [ "<" <ty-params> ">" ] [ "(" <ty-params> ")" ] [ "of" <type> ] ";" 
-<rec-decl> := "record" <u-ident> [ "<" <ty-params> ">" ] [ "(" <ty-params> ")" ] "{" { <type> <l-ident> ";" } "}" 
+<rec-decl> := "record" <u-ident> [ "<" <ty-params> ">" ] [ "(" <ty-params> ")" ] "with" "constructor" <u-ident> "{" { <type> <l-ident> ";" } "}" 
 
 <ty-params> := <ty-param> { "," <ty-param> }
 <ty-param> := <type> [ <l-ident> ]

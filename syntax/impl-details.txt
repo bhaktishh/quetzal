@@ -281,16 +281,8 @@ we work in a state monad for indentation data
 
 
 errors: 
-- need to check return statements in fsm monads: return store or not 
-- no lifts in actions
-- actions should be BOTH run under IO and have access to this
-    - but if it's passed in as a variable no special transform is required??? 
-        - except returning the store as a pair 
-        - so we probably need action / exec distinction in trMonadListStmt.  
-- in run, transform the functions to the monad constructors (!!!)
-    - `pure ()` must be `Pure<fsmName> ()`
 
 - do i break idxm structure / laws by adding an argument? 
+    - NO
 
-- records: add constructor to syntax
 - decEq to PM

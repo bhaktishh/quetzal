@@ -8,7 +8,7 @@ type LoginResult {
     constructor BadPassword;
 }
 
-type Store with constructor MkStore {
+record Store with constructor MkStore {
     String secret;
     String pub; 
 }
@@ -42,11 +42,14 @@ func mkStore(String secret, String pub) returns Store {
 #run FSM(Store, Access) with this = mkStore("secret", "pub") [LoggedOut]
 [IO] func main() {
     LoginResult res = this.login();
-    eif (res == OK) {
-        String secret = this.readSecret(); 
-        IO.print(secret);
-        this.logout();
-    } else {
-        IO.print("bad password");
+    switch (res) {
+        case OK {
+            String secret = this.readSecret(); 
+            IO.print(secret);
+            this.logout();
+        }
+        case BadPassword {
+            IO.print("bad password");
+        }
     }
 }

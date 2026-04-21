@@ -169,14 +169,15 @@ trTyDecl
 trRecDecl :: RecDecl -> IRecDecl
 trRecDecl
   RecDecl
-    { recDeclName,
+    { recDeclTyName,
+      recDeclConName,
       recDeclParams,
       recDeclFields
     } =
     IRecDecl
-      { iRecDeclName = recDeclName,
+      { iRecDeclName = recDeclTyName,
         iRecDeclParams = map trAnnParam recDeclParams,
-        iRecDeclConstructor = "Mk" ++ recDeclName,
+        iRecDeclConstructor = recDeclConName,
         iRecDeclFields = map (trAnnParam . (`AnnParam` True)) recDeclFields
       }
 
@@ -231,7 +232,7 @@ trListStmt f ctx (StDot x g args : xs) w =
 trListStmt f ctx (StWhile condition body : xs) w = trWhile f ctx condition body xs w False
 trListStmt f ctx (StEWhile condition body : xs) w = trWhile f ctx condition body xs w True
 trListStmt f ctx (StSwitch (Switch {switchOn, cases, defaultCase}) : xs) w =
-  let tmp = map (\(Case caseOn caseBody) -> (if null caseOn then replicate (length switchOn) ITmWildCard else map trTm caseOn, trListStmt f ctx (caseBody : xs) w)) (cases ++ maybeToList defaultCase)
+  let tmp = map (\(Case caseOn caseBody) -> (if null caseOn then replicate (length switchOn) ITmWildCard else map trTm caseOn, trListStmt f ctx (unblock caseBody ++ xs) w)) (cases ++ maybeToList defaultCase)
       branches = map (\(caseOn, (itm, w')) -> ((caseOn, itm), w')) tmp
    in (ITmMatch (map trTm switchOn) (map fst branches), concatMap snd branches)
 
@@ -366,7 +367,7 @@ trMonadListStmt f mdir ctx (StEIf c t e : xs) w =
       itm = convIOIf (trTm c) (ITmDo t') (ITmDo e')
    in ([itm], wt ++ we)
 trMonadListStmt f mdir ctx (StSwitch (Switch switchOn cases defaultCase) : xs) w =
-  let tmp = map (\(Case caseOn caseBody) -> (if null caseOn then replicate (length switchOn) ITmWildCard else map trTm caseOn, trMonadListStmt f mdir ctx (caseBody : xs) w)) (cases ++ maybeToList defaultCase)
+  let tmp = map (\(Case caseOn caseBody) -> (if null caseOn then replicate (length switchOn) ITmWildCard else map trTm caseOn, trMonadListStmt f mdir ctx (unblock caseBody ++ xs) w)) (cases ++ maybeToList defaultCase)
       branches = map (\(caseOn, (itm, w')) -> ((caseOn, ITmDo itm), w')) tmp
    in ([ITmDoCase (map trTm switchOn) (map fst branches)], concatMap snd branches)
 trMonadListStmt f mdir ctx (StWhile condition body : xs) w = trMonadWhile f mdir ctx condition body xs w False
@@ -398,7 +399,7 @@ trMonadWhile f mdir ctx condition body xs w isE =
    in ([rCall], ITmFunc innerFunc' : w'')
 
 convIOIf :: ITm -> ITm -> ITm -> ITmDo
-convIOIf c t e = ITmDoCase [trBool c] [([ITmCon "Yes" [ITmVar "yesprf"]], t), ([ITmCon "No" [ITmVar "noprf"]], e)]
+convIOIf c t e = ITmDoCase [trBool c] [([ITmCon "Yes" [ITmVar "Refl"]], t), ([ITmCon "No" [ITmVar "noprf"]], e)]
 
 trConstructor :: Constructor -> IConstructor
 trConstructor
@@ -537,7 +538,7 @@ mkRun str concTy decl =
           iWhere = []
         }
 
-trFSM :: FSM -> IFSM
+trFSM :: FSM -> (ITyDecl, IFunc)
 trFSM FSM {resourceTy, stateTy, initCons, actions} =
   let showFSM = myShowTy resourceTy ++ "_" ++ myShowTy stateTy
       idxmName = "Idxm" ++ showFSM
@@ -553,11 +554,7 @@ trFSM FSM {resourceTy, stateTy, initCons, actions} =
       conc = trTy resourceTy
       run = mkRun showFSM conc idxm'
       idxm = idxm' {iTyDeclConstructors = confuncs ++ map (\f -> f showFSM idxmName) [mkConPure, mkConBind, mkConLift]}
-   in IFSM
-        { idxm,
-          conc,
-          run
-        }
+   in (idxm, run)
 
 -- -----------------------------
 -- AnnParam and IAnnParam utils
@@ -593,7 +590,7 @@ noAnnIParam ty = IAnnParam ("", ty) True
 
 -- dependent pattern matching via if statements
 convIf :: ITm -> ITm -> ITm -> ITm
-convIf c t e = ITmMatch [trBool c] [([ITmCon "Yes" [ITmVar "yesprf"]], t), ([ITmCon "No" [ITmVar "noprf"]], e)]
+convIf c t e = ITmMatch [trBool c] [([ITmCon "Yes" [ITmVar "Refl"]], t), ([ITmCon "No" [ITmVar "noprf"]], e)]
 
 mapFromFuncArgs :: List AnnParam -> M.Map String PTy -> M.Map String PTy
 mapFromFuncArgs [] m = m

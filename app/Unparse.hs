@@ -3,7 +3,7 @@
 module Unparse where
 
 import Control.Monad.State.Lazy
-import Data.List (intercalate)
+import Data.List (intercalate, sort)
 import Data.Maybe (fromMaybe)
 import ITypes
 import PToI (deriveDecEq)
@@ -21,30 +21,22 @@ uProg [] = pure ""
 uProg (x : xs) = case x of
   IIDecl decl -> do
     dec <- uTypes decl
-    (ind, t) <- get
-    put (ind, False)
-    impl <- uImplementation (deriveDecEq decl)
-    put (ind, t)
     prog <- uProg xs
-    pure $ dec ++ "\n\n" ++ impl ++ "\n\n" ++ prog
+    pure $ dec ++ "\n\n" ++ prog
   IIFunc func -> do
     f <- uFuncs func
     pr <- uProg xs
     pure $ f ++ "\n\n" ++ pr
   IIImport m -> do
     pr <- uProg xs
-    pure $ "import " ++ m ++ "\n\n" ++ pr
-  IIFSM fsm -> do
-    -- TODO
-    fsm <- uFSM fsm
+    pure $ "import " ++ m ++ "\n" ++ pr
+  IIImplementation i -> do
+    (ind, t) <- get
+    put (ind, t)
+    i' <- uImplementation i
+    put (ind, False)
     pr <- uProg xs
-    pure $ fsm ++ "\n\n" ++ pr
-
-uFSM :: IFSM -> Indent String
-uFSM IFSM {idxm, conc, run} = do
-  sidxm <- uTyDecl idxm
-  srun <- uFuncs run
-  pure $ sidxm ++ "\n\n" ++ srun ++ "\n\n"
+    pure $ i' ++ "\n\n" ++ pr
 
 uTypes :: IDecl -> Indent String
 uTypes (ITy tdecl) = uTyDecl tdecl

@@ -12,7 +12,7 @@ data ITy
   | ITyVar String
   | ITyApp ITy (List ITm)
   | ITyList ITy
-  | ITyPair ITy ITy 
+  | ITyPair ITy ITy
   | ITyIO ITy
   | ITyTm ITm
   | ITyHole
@@ -22,7 +22,7 @@ data ITm
   = ITmNat Nat
   | ITmWildCard
   | ITmPlus ITm ITm
-  | ITmString String 
+  | ITmString String
   | ITmMinus ITm ITm
   | ITmMult ITm ITm
   | ITmDiv ITm ITm
@@ -83,7 +83,7 @@ data IDecl = ITy ITyDecl | IRec IRecDecl
 
 type IProg = List IProgEl
 
-data IProgEl = IIDecl IDecl | IIFunc IFunc | IIImport String | IIFSM IFSM 
+data IProgEl = IIImport String | IIDecl IDecl | IIFunc IFunc | IIImplementation IImplementation
   deriving (Show, Eq)
 
 data IFunc = IFunc
@@ -117,14 +117,16 @@ data IImplCaseBody = Tm ITm | Nest (List IImplCase) deriving (Show, Eq)
 
 data IFSM = IFSM
   { idxm :: ITyDecl, -- actions
-    conc :: ITy, -- concrete type associated so it can be passed around 
-    run :: IFunc -- monadic run function for constructors 
-  } deriving (Show, Eq)
+    conc :: ITy, -- concrete type associated so it can be passed around
+    run :: IFunc -- monadic run function for constructors
+  }
+  deriving (Show, Eq)
 
-data ITmDo = ITmDoLet String (Maybe ITy) ITm
-            | ITmDoBind (List ITm) ITm -- (a,b..) <- tm
-            | ITmDoCase (List ITm) (List (List ITm, ITm))
-            | ITmDoPure ITm
-            | ITmDoIf ITm ITm ITm
-            | ITmDoTm ITm -- arbitrary do terms 
-             deriving (Show, Eq)
+data ITmDo
+  = ITmDoLet String (Maybe ITy) ITm
+  | ITmDoBind (List ITm) ITm -- (a,b..) <- tm
+  | ITmDoCase (List ITm) (List (List ITm, ITm))
+  | ITmDoPure ITm
+  | ITmDoIf ITm ITm ITm
+  | ITmDoTm ITm -- arbitrary do terms
+  deriving (Show, Eq)

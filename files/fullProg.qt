@@ -1,3 +1,12 @@
+eif (res == OK) {
+        String secret = this.readSecret(); 
+        IO.print(secret);
+        this.logout();
+    } else {
+        IO.print("bad password");
+    }
+
+
 type Vect(Nat n, Ty t) {
     constructor Nil() of Vect(0, t);
     constructor Cons(t head, Vect(n, t) tail) of Vect(1+n, t);

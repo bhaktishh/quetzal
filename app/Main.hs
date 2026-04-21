@@ -1,6 +1,10 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Main where
 
+import Data.List (partition)
 import qualified Data.Map as M
+import Data.Maybe
 import ITypes
 import PToI
 import PTypes
@@ -36,14 +40,24 @@ processFile inpf outpf = do
     Right prg' -> do
       let kvs = foldr mkFSMs M.empty (getFuncs prg')
           prg = prg' ++ (PFSM <$> M.elems kvs)
-          iprg = IIImport "Decidable.Equality" : map trProgEl prg
+          iprg = IIImport "Decidable.Equality" : mkProgEls prg ([], [], [], [])
       writeIdris iprg outpf
 
-trProgEl :: ProgEl -> IProgEl
-trProgEl (PFunc f) = IIFunc $ trFunc f M.empty
-trProgEl (PDecl x) = IIDecl $ trDecl x
-trProgEl (PImport x) = IIImport x
-trProgEl (PFSM fsm) = IIFSM $ trFSM fsm
+-- args     og list       (imports, (declaration, maybe deceq), functions, functions w directives)
+mkProgEls :: [ProgEl] -> ([IProgEl], [(IProgEl, Maybe IProgEl)], [IProgEl], [IProgEl]) -> [IProgEl]
+mkProgEls [] (is, ds, fs, fds) =
+  let ds' = foldr (\(dec, mimp) acc -> dec : maybeToList mimp ++ acc) [] ds
+   in is ++ ds' ++ fs ++ fds
+mkProgEls (PFSM fsm : xs) (is, ds, fs, fds) =
+  let (decl, frun) = trFSM fsm
+   in mkProgEls xs (is, ds ++ [(IIDecl (ITy decl), Nothing)], fs ++ [IIFunc frun], fds)
+mkProgEls (PImport str : xs) (is, ds, fs, fds) = mkProgEls xs (is ++ [IIImport str], ds, fs, fds)
+mkProgEls (PDecl d : xs) (is, ds, fs, fds) =
+  let d' = trDecl d
+   in mkProgEls xs (is, ds ++ [(IIDecl d', Just (IIImplementation $ deriveDecEq d'))], fs, fds)
+mkProgEls (PFunc f : xs) (is, ds, fs, fds) = case funcDirective f of
+  Just (Directive _ (DRun {})) -> mkProgEls xs (is, ds, fs, fds ++ [IIFunc (trFunc f M.empty)])
+  _ -> mkProgEls xs (is, ds, fs ++ [IIFunc (trFunc f M.empty)], fds)
 
 writeIdris :: IProg -> String -> IO ()
 writeIdris p fpath = writeFile fpath (unparse p)

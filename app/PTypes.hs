@@ -134,7 +134,8 @@ data TyDecl = TyDecl
   deriving (Show, Eq)
 
 data RecDecl = RecDecl
-  { recDeclName :: String,
+  { recDeclTyName :: String,
+    recDeclConName :: String,
     recDeclParams :: List AnnParam,
     recDeclFields :: List (PTy, String)
   }

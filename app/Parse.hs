@@ -4,7 +4,7 @@
 module Parse where
 
 import Data.Char (toUpper)
-import Data.List (intercalate, intersperse)
+import Data.List (intercalate, intersperse, singleton)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import Data.Void (Void)
@@ -22,16 +22,17 @@ import Text.Megaparsec
     (<|>),
   )
 import Text.Megaparsec.Char
-    ( alphaNumChar,
-      char,
-      digitChar,
-      letterChar,
-      lowerChar,
-      space,
-      upperChar,
-      string )
+  ( alphaNumChar,
+    char,
+    digitChar,
+    letterChar,
+    lowerChar,
+    space,
+    string,
+    upperChar,
+  )
 
--- TODO parse lists 
+-- TODO parse lists
 
 type Parser = Parsec Void String
 
@@ -297,14 +298,18 @@ pTyDeclConstructor = do
 pRecDecl :: Parser RecDecl
 pRecDecl = do
   _ <- pSpaces $ string "record"
-  recDeclName <- pSpaces pUpperStr
+  recDeclTyName <- pSpaces pUpperStr
   impArgs <- try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> pSpaces (pAngles pFuncArgs) <|> pure []
   expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs) <|> pure []
+  _ <- pSpaces $ string "with"
+  _ <- pSpaces $ string "constructor"
+  recDeclConName <- pSpaces pUpperStr
   let recDeclParams = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   recDeclFields <- pSpaces $ pCurlies $ many pRecDeclField
   pure $
     RecDecl
-      { recDeclName,
+      { recDeclTyName,
+        recDeclConName,
         recDeclParams,
         recDeclFields
       }
@@ -573,7 +578,7 @@ pDefault = do
 pCase :: Parser Case
 pCase = do
   _ <- pSpaces $ string "case"
-  caseOn <- pSpaces $ pParens $ pPTm `sepBy` char ','
+  caseOn <- pSpaces (pParens $ pPTm `sepBy` char ',') <|> (singleton <$> pSpaces pPTm)
   caseBody <- pSpaces $ pCurlies pStmt
   pure $
     Case
