@@ -7,7 +7,7 @@ module PToI where
 
 import qualified Data.Bifunctor
 import Data.Char (toLower, toUpper)
-import Data.List (nub, unsnoc)
+import Data.List (nub, nubBy, unsnoc)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isNothing, maybeToList)
 import Data.Tuple (swap)
@@ -66,15 +66,6 @@ trPBool (PTmBAnd t1 t2) = PTmBAnd (trPBool t1) (trPBool t2)
 trPBool (PTmBOr t1 t2) = PTmBOr (trPBool t1) (trPBool t2)
 trPBool (PTmNot t) = PTmNot (trPBool t)
 trPBool x = x
-
--- -- takes a function body : Stmt and function itself : Func
--- -- converts into a IFunc body and where clause
--- trFuncBody :: Func -> IFunc
--- trFuncBody f =
---   let x = funcBody f
---       argMap = mapFromFuncArgs (funcArgs f) M.empty
---       args = map (\(AnnParam (ty, str) _) -> (str, ty)) (funcArgs f)
---    in trListStmt f argMap
 
 trFunc :: Func -> M.Map String ITy -> IFunc
 -- when under a run directive, the function is run under the fsm idxm
@@ -217,12 +208,12 @@ trListStmt f ctx (StSkip : xs) w = trListStmt f ctx xs w
 trListStmt _ _ (StReturn _ : _) _ = error "return should be the last statement in the block"
 trListStmt f ctx (StIf t s1 s2 : xs) w =
   let (t1, w1) = trListStmt f ctx (unblock s1 ++ xs) w
-      (t2, w2) = trListStmt f ctx (unblock s2 ++ xs) w1
-   in (ITmIf (trTm t) t1 t2, w2)
+      (t2, w2) = trListStmt f ctx (unblock s2 ++ xs) w
+   in (ITmIf (trTm t) t1 t2, nub (w1 ++ w2))
 trListStmt f ctx (StEIf t s1 s2 : xs) w =
   let (t1, w1) = trListStmt f ctx (unblock s1 ++ xs) w
-      (t2, w2) = trListStmt f ctx (unblock s2 ++ xs) w1
-   in (convIf (trTm t) t1 t2, w2)
+      (t2, w2) = trListStmt f ctx (unblock s2 ++ xs) w
+   in (convIf (trTm t) t1 t2, nub (w1 ++ w2))
 trListStmt f ctx (StAssign x t : xs) w =
   let (t', w') = trListStmt f ctx xs w
    in (ITmLet x (M.lookup x ctx) (trTm t) t', w')
@@ -240,7 +231,7 @@ trListStmt f ctx (StSwitch (Switch {switchOn, cases, defaultCase}) : xs) w =
 trWhile :: Func -> M.Map String ITy -> PTm -> Stmt -> List Stmt -> List ITm -> Bool -> (ITm, [ITm])
 trWhile f ctx condition body xs w isE =
   let f_rec_name = funcName f ++ "_rec" ++ show (length w)
-      args = nub $ map trAnnParam (funcArgs f) ++ map (`IAnnParam` True) (M.toList ctx)
+      args = nubBy (\x y -> getIAnnParamVar x == getIAnnParamVar y) $ map trAnnParam (funcArgs f) ++ map (`IAnnParam` True) (M.toList ctx)
       iArgsVars = map (ITmVar . getIAnnParamVar) args
       argsVars = map (PTmVar . getIAnnParamVar) args
       rCall = PTmFuncCall (PTmVar f_rec_name) argsVars
@@ -253,24 +244,21 @@ trWhile f ctx condition body xs w isE =
             iFuncRetTy = trTy (funcRetTy f),
             iWhere = []
           }
-      (rest, w'') = trListStmt f ctx xs (ITmFunc innerFunc : w')
+      (rest, w'') = trListStmt f ctx xs w
       innerBodyLHS = ITmFuncCall (ITmVar f_rec_name) iArgsVars
       innerBodyRHS = (if isE then convIf else ITmIf) (trTm condition) bdy rest
       innerFunc' = innerFunc {iFuncBody = [(innerBodyLHS, innerBodyRHS)]}
-   in (trTm rCall, ITmFunc innerFunc' : w'')
+   in (trTm rCall, ITmFunc innerFunc' : nub (w' ++ w''))
 
 fsmName :: Maybe Directive -> String
 fsmName (Just (Directive (DFSM resourceTy stateTy) _)) = myShowTy resourceTy ++ "_" ++ myShowTy stateTy
 fsmName Nothing = error "no directive!"
 
--- Maybe String : if Nothing then IO monad, if something then var to update under Some
 -- three cases: fsm exec, fsm action, IO
 -- fsm exec and fsm action need access to `this` variable
 -- fsm action needs to return pair of rval and resource
 -- fsm exec needs to lift to IO if IO is used
 -- lifting is only done in run function helper
--- TODO check pairs of returns
-
 -- args           og func  monad info      ctx map            body          where       (body, where)
 trMonadListStmt :: Func -> Maybe Directive -> M.Map String ITy -> List Stmt -> List ITm -> (List ITmDo, List ITm)
 --------------------------------------------------------------------------
@@ -360,12 +348,12 @@ trMonadListStmt g mdir ctx (StDot x f args : xs) w =
 trMonadListStmt f mdir ctx (StIf c t e : xs) w =
   let (t', wt) = trMonadListStmt f mdir ctx (unblock t ++ xs) w
       (e', we) = trMonadListStmt f mdir ctx (unblock e ++ xs) w
-   in ([ITmDoIf (trTm c) (ITmDo t') (ITmDo e')], wt ++ we)
+   in ([ITmDoIf (trTm c) (ITmDo t') (ITmDo e')], nub (wt ++ we))
 trMonadListStmt f mdir ctx (StEIf c t e : xs) w =
   let (t', wt) = trMonadListStmt f mdir ctx (unblock t ++ xs) w
       (e', we) = trMonadListStmt f mdir ctx (unblock e ++ xs) w
       itm = convIOIf (trTm c) (ITmDo t') (ITmDo e')
-   in ([itm], wt ++ we)
+   in ([itm], nub (wt ++ we))
 trMonadListStmt f mdir ctx (StSwitch (Switch switchOn cases defaultCase) : xs) w =
   let tmp = map (\(Case caseOn caseBody) -> (if null caseOn then replicate (length switchOn) ITmWildCard else map trTm caseOn, trMonadListStmt f mdir ctx (unblock caseBody ++ xs) w)) (cases ++ maybeToList defaultCase)
       branches = map (\(caseOn, (itm, w')) -> ((caseOn, ITmDo itm), w')) tmp
@@ -392,11 +380,11 @@ trMonadWhile f mdir ctx condition body xs w isE =
             iFuncRetTy = trTy (funcRetTy f),
             iWhere = []
           }
-      (rest, w'') = trMonadListStmt f mdir ctx xs (ITmFunc innerFunc : w')
+      (rest, w'') = trMonadListStmt f mdir ctx xs w
       innerBodyLHS = ITmFuncCall (ITmVar f_rec_name) argsVars
       innerBodyRHS = ITmDo [(if isE then convIOIf else ITmDoIf) (trTm condition) (ITmDo (bdy ++ [rCall])) (ITmDo rest)]
       innerFunc' = innerFunc {iFuncBody = [(innerBodyLHS, innerBodyRHS)]}
-   in ([rCall], ITmFunc innerFunc' : w'')
+   in ([rCall], ITmFunc innerFunc' : nub (w' ++ w''))
 
 convIOIf :: ITm -> ITm -> ITm -> ITmDo
 convIOIf c t e = ITmDoCase [trBool c] [([ITmCon "Yes" [ITmVar "Refl"]], t), ([ITmCon "No" [ITmVar "noprf"]], e)]

@@ -48,7 +48,6 @@ reserved =
     "record",
     "return",
     "case",
-    "Void",
     "switch",
     "Ty",
     "FSM",
@@ -417,8 +416,8 @@ pStmt = StBlock <$> some pStmt0
 pStmt0 :: Parser Stmt
 pStmt0 =
   try pSkip
-    <|> try pDeclAssign
     <|> try pAssign
+    <|> try pDeclAssign
     <|> try pWhile
     <|> try pEWhile
     <|> try pStReturn

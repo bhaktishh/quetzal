@@ -254,7 +254,7 @@ uTm b (ITmIf cond thenCase elseCase) = do
   put (ind + 1, True)
   elseCase <- uTm False elseCase
   put (ind, False)
-  pure $ indent t ind ++ putParens b ("if " ++ cond ++ " then \n" ++ thenCase ++ "\n" ++ indent t ind ++ "else \n" ++ elseCase)
+  pure $ indent t ind ++ putParens b ("if " ++ cond ++ " then \n" ++ thenCase ++ "\n" ++ indent True ind ++ "else \n" ++ elseCase)
 uTm _ ITmUnit = do
   (ind, t) <- get
   pure $ indent t ind ++ "()"
@@ -454,8 +454,8 @@ uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
   retty <- uTy False iFuncRetTy
   args <- mapM (uAnnParam True) iFuncArgs
   -- put (ind + 1, True)
-  bodies <- mapM (\(l, body) -> (,) <$> uTm False l <*> uTm False body) iFuncBody
-  -- put (ind, False)
+  bodies <- mapM (\(l, body) -> (,) <$> uTm False l <*> (put (ind + 1, True) >> uTm False body)) iFuncBody
+  put (ind, False)
   deps <-
     mapM
       ( \i -> do
@@ -473,13 +473,14 @@ uFuncs IFunc {iFuncName, iFuncRetTy, iFuncArgs, iFuncBody, iWhere} = do
       ++ retty
       ++ "\n"
       ++ indent t ind
-      ++ intercalate "\n" (map (\(l, body) -> l ++ " = " ++ body) bodies)
+      ++ intercalate "\n" (map (\(l, body) -> l ++ " = \n" ++ body) bodies)
       ++ if null deps
         then ""
         else
           indent t ind
             ++ "\nwhere \n"
-            ++ intercalate "\n where \n" deps
+            ++ indent t (ind + 1)
+            ++ intercalate "\n" deps
 
 uImplementation :: IImplementation -> Indent String
 uImplementation Impl {iImplicits, iConstraints, iSubject, iBody} = do

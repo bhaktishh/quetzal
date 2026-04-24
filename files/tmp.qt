@@ -1,52 +1,16 @@
-type Access {
-    constructor LoggedIn; 
-    constructor LoggedOut; 
-}
-
-type LoginResult {
-    constructor OK;
-    constructor BadPassword;
-}
-
-record Store {
-    String secret;
-    String pub; 
-}
-
-#action FSM(Store, Access) returns LoginResult r [LoggedOut --> (r == OK) ? LoggedIn : LoggedOut]
-[IO] func login() returns LoginResult {
-    IO.print("enter password");
-    String pw = IO.getLine();
-    if (pw == "password123") {
-        return OK;
-    } else {
-        return BadPassword;
+func testLoop (Nat n) returns Nat {
+    Nat x = 11;
+    x = 12; 
+    if (x < 10) {
+        while (n < 10) {
+            x = x + 1;
+            n = n + 4;
+        }
+        n = n + 1;
+        return n;
     }
-}
-
-#action FSM(Store, Access) [LoggedIn --> LoggedOut]
-[IO] func logout() {
-    IO.print("logging out");
-}
-
-#action FSM(Store, Access) returns String [LoggedIn]
-[IO] func readSecret() returns String {
-        return this.secret;
-}
-
-#init FSM(Store, Access)
-func mkStore(String secret, String pub) returns Store {
-    return Store(secret, pub);
-}
-
-#run FSM(Store, Access) with this = mkStore("secret", "pub") [LoggedOut]
-[IO] func main() {
-    LoginResult res = this.login();
-    eif (res == OK) {
-        String secret = this.readSecret(); 
-        IO.print(secret);
-        this.logout();
-    } else {
-        IO.print("bad password");
+    else {
+        n = n + 2; 
+        return n + 4;
     }
 }

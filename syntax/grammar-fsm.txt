@@ -10,7 +10,7 @@
 <ty-params> := <ty-param> { "," <ty-param> }
 <ty-param> := <type> [ <l-ident> ]
 
-<directive-sub> := "FSM" "(" <type> "," <type ")"
+<directive-sub> := "FSM" "(" <type> "," <type> ")"
 
 <directive> := "#action" <directive-sub> [ "returns" <ty-param> ] "[" <term> [ "--> <term> ] "]"
             | "#init" <directive-sub> 
@@ -53,6 +53,7 @@
 <default> := "default" "{" <stmt> "}"
 
 <nat> := <digit> { <digit> }
+<bool> := "True" | "False"
 
 <u-ident> := <u-char> { ( <u-char> | <l-char> ) }
 <l-ident> := <l-char> { ( <u-char> | <l-char> ) }

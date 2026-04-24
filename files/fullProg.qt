@@ -1,12 +1,3 @@
-eif (res == OK) {
-        String secret = this.readSecret(); 
-        IO.print(secret);
-        this.logout();
-    } else {
-        IO.print("bad password");
-    }
-
-
 type Vect(Nat n, Ty t) {
     constructor Nil() of Vect(0, t);
     constructor Cons(t head, Vect(n, t) tail) of Vect(1+n, t);
@@ -37,7 +28,7 @@ type Test (Ty t) {
     constructor C1(Bool s) of Test(t);
 }
 
-record DPairRec(Ty t, Func(t a => Ty) p) {
+record DPairRec(Ty t, Func(t a => Ty) p) with constructor MkDPairRec {
     t fst; 
     p(fst) snd;
 }

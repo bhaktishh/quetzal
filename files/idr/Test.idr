@@ -561,31 +561,21 @@ main = do
 -- -- -- -- -- 			decEq (MyC a1 b1 c1) (MyC a1 b2 c2) | Yes Refl | No prf = No $ (\h => prf (case h of Refl => Refl))
 -- -- -- -- -- 		decEq (MyC a1 b1 c1) (MyC a2 b2 c2) | No prf = No $ (\h => prf (case h of Refl => Refl))
 
--- (DecEq t) => DecEq (SoManyArgs t) where 
--- 	decEq (MyC a1 b1 c1 d1) (MyC a2 b2 c2 d2) with (decEq a1 a2)
--- 		decEq (MyC a1 b1 c1 d1) (MyC a1 b2 c2 d2) | Yes Refl  with (decEq b1 b2)
--- 			decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c2 d2) | Yes Refl | Yes Refl  with (decEq c1 c2)
--- 				decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c1 d2) | Yes Refl | Yes Refl | Yes Refl  with (decEq d1 d2)
--- 					decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c1 d1) | Yes Refl | Yes Refl | Yes Refl | Yes Refl  = Yes Refl
--- 					decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c1 d2) | Yes Refl | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- 						(Refl) => Refl)))
--- 				decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c2 d2) | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- 					(Refl) => Refl)))
--- 			decEq (MyC a1 b1 c1 d1) (MyC a1 b2 c2 d2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
--- 				(Refl) => Refl)))
--- 		decEq (MyC a1 b1 c1 d1) (MyC a2 b2 c2 d2) | No prf  = No (\h => (prf (case (h) of
--- 			(Refl) => Refl)))
+(DecEq t) => DecEq (SoManyArgs t) where 
+	decEq (MyC a1 b1 c1 d1) (MyC a2 b2 c2 d2) with (decEq a1 a2)
+		decEq (MyC a1 b1 c1 d1) (MyC a1 b2 c2 d2) | Yes Refl  with (decEq b1 b2)
+			decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c2 d2) | Yes Refl | Yes Refl  with (decEq c1 c2)
+				decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c1 d2) | Yes Refl | Yes Refl | Yes Refl  with (decEq d1 d2)
+					decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c1 d1) | Yes Refl | Yes Refl | Yes Refl | Yes Refl  = Yes Refl
+					decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c1 d2) | Yes Refl | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
+						(Refl) => Refl)))
+				decEq (MyC a1 b1 c1 d1) (MyC a1 b1 c2 d2) | Yes Refl | Yes Refl | No prf  = No (\h => (prf (case (h) of
+					(Refl) => Refl)))
+			decEq (MyC a1 b1 c1 d1) (MyC a1 b2 c2 d2) | Yes Refl | No prf  = No (\h => (prf (case (h) of
+				(Refl) => Refl)))
+		decEq (MyC a1 b1 c1 d1) (MyC a2 b2 c2 d2) | No prf  = No (\h => (prf (case (h) of
+			(Refl) => Refl)))
 
--- -- -- -- -- (DecEq t) => DecEq (SoManyArgs t) where
--- -- -- -- -- 	decEq (MyC a1 b1 c1) (MyC a2 b2 c2) with (decEq a1 a2) | (decEq b1 b2) | (decEq c1 c2)
--- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a1 b1 c1 ) | Yes Refl | Yes Refl | Yes Refl = Yes Refl 
--- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a1 b1 c2 ) | Yes Refl | Yes Refl | No prf  = No $ (\h => prf (case h of Refl => Refl)) 
--- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a1 b2 c1 ) | Yes Refl | No prf | Yes Refl = No $ (\h => prf (case h of Refl => Refl))
--- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a1 b2 c2 ) | Yes Refl | No prf1 | No prf2 = No $ (\h => prf1 (prf2 (case h of Refl => Refl)))
--- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a2 b1 c1 ) | No prf | Yes Refl | Yes Refl = No $ (\h => prf (case h of Refl => Refl))
--- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a2 b1 c2 ) | No prf1 | Yes Refl | No prf2 = No $ (\h => prf1 (prf2 (case h of Refl => Refl)))
--- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a2 b2 c1 ) | No prf1 | No prf2 | Yes Refl = No $ (\h => prf1 (prf2 (case h of Refl => Refl)))
--- -- -- -- -- 		decEq (MyC a1 b1 c1 ) (MyC a2 b2 c2 ) | No prf1 | No prf2 | No prf3 = No $ (\h => prf1 (prf2 (prf3 (case h of Refl => Refl))))
 -- -- -- -- -- import Data.Vect
 
 -- -- -- -- -- import Data.Nat
