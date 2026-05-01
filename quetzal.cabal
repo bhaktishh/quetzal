@@ -56,6 +56,8 @@ executable quetzal-exe
       Paths_quetzal
   hs-source-dirs:
       app
+  default-extensions:
+      NamedFieldPuns
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wunused-top-binds -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
