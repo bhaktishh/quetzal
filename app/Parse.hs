@@ -1,8 +1,11 @@
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TupleSections #-}
 
 module Parse where
 
-import Data.List (intercalate, intersperse)
+import Data.Char (toUpper)
+import Data.List (intercalate, intersperse, singleton)
+import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import Data.Void (Void)
 import GHC.TypeLits (Nat)
@@ -11,6 +14,7 @@ import Text.Megaparsec
   ( MonadParsec (eof, try),
     Parsec,
     many,
+    noneOf,
     optional,
     parse,
     sepBy,
@@ -18,6 +22,17 @@ import Text.Megaparsec
     (<|>),
   )
 import Text.Megaparsec.Char
+  ( alphaNumChar,
+    char,
+    digitChar,
+    letterChar,
+    lowerChar,
+    space,
+    string,
+    upperChar,
+  )
+
+-- TODO parse lists
 
 type Parser = Parsec Void String
 
@@ -33,11 +48,12 @@ reserved =
     "record",
     "return",
     "case",
-    "Void",
     "switch",
     "Ty",
     "FSM",
-    "action"
+    "action",
+    "init",
+    "run"
   ]
 
 pSpaces :: Parser a -> Parser a
@@ -64,16 +80,30 @@ pAngles p = do
   _ <- pSpaces $ char '>'
   pure x
 
+pSquare :: Parser a -> Parser a
+pSquare p = do
+  _ <- pSpaces $ char '['
+  x <- p
+  _ <- pSpaces $ char ']'
+  pure x
+
 tmParse :: String -> Prog
 tmParse str = case parse pProg "" str of
   Left _ -> undefined
   Right tm -> tm
 
+pTmString :: Parser PTm
+pTmString = do
+  _ <- pSpaces $ char '"'
+  str <- pSpaces $ many (noneOf "\"")
+  _ <- pSpaces $ char '"'
+  pure $ PTmString str
+
 pTLDecl :: Parser Decl
 pTLDecl = (PTy <$> pTyDecl) <|> (Rec <$> pRecDecl)
 
 pProgEl :: Parser ProgEl
-pProgEl = pSpaces (pImport <|> (PDecl <$> pTLDecl) <|> (PFunc <$> pFunc) <|> (PFSM <$> pFSM))
+pProgEl = pSpaces (pImport <|> (PDecl <$> pTLDecl) <|> (PFunc <$> pFunc))
 
 pImport :: Parser ProgEl
 pImport = do
@@ -81,55 +111,42 @@ pImport = do
   m <- pSpaces $ pUpperStr `sepBy` char '.'
   pure $ PImport (intercalate "." m)
 
+getFuncs :: Prog -> List Func
+getFuncs [] = []
+getFuncs (PFunc f : xs) = f : getFuncs xs
+getFuncs (_ : xs) = getFuncs xs
+
 pProg :: Parser Prog
 pProg = many (pSpaces pProgEl) <* eof
 
-pAction :: Parser Action
-pAction = do
-  _ <- pSpaces $ string "action"
-  actionName <- pSpaces pLowerStr
-  ret <- try (pSpaces (string "returns") >> pSpaces pPTy) <|> pure PTyUnit
-  retVar <- try (pSpaces pLowerStr) <|> pure ""
-  let actionRetTy = mkAnnParam True (ret, retVar)
-  _ <- pSpaces $ char '['
-  stIn <- pSpaces pPTm
-  stOut <- try (pSpaces (string "-->") >> pSpaces pPTm) <|> pure stIn
-  let actionStTrans = (stIn, stOut)
-  _ <- pSpaces $ char ']'
-  _ <- pSpaces $ char ';'
-  actionFunc <- pSpaces pFunc
-  pure $
-    Action
-      { actionName,
-        actionRetTy,
-        actionStTrans,
-        actionFunc
-      }
+-- prog ::
+-- pProg = do
+--   prog <- many (pSpaces pProgEl) <* eof
+--   -- TODO should we store a map of some sort for easy identification of exec func data
+--   -- i dont think this will be necessary actually but will keep around to try later
+--   pure ((PFSM <$> M.elems kvs) ++ prog, kvs)
 
-pFSM :: Parser FSM
-pFSM = do
-  _ <- pSpaces $ string "impl"
-  _ <- pSpaces $ string "FSM"
-  _ <- pSpaces $ char '{'
-  (ty, var) <- pSpaces (string "resource") >> pSpaces (char '=') >> ((,) <$> pSpaces pPTy <*> pSpaces pVar)
-  let resource = mkAnnParam True (ty, var)
-  _ <- pSpaces $ char ';'
-  stateTy <- pSpaces (string "stateTy") >> pSpaces (char '=') >> pSpaces pUpperStr
-  _ <- pSpaces $ char ';'
-  initCons <- try $ many (pSpaces pFunc)
-  actions <- try $ many (pSpaces pAction)
-  _ <- pSpaces $ char '}'
-  _ <- pSpaces $ string "with"
-  _ <- pSpaces $ string "exec"
-  exec <- pSpaces pFunc 
-  pure $
-    FSM
-      { resource,
-        stateTy,
-        initCons,
-        actions,
-        exec
-      }
+fstUpper :: String -> String
+fstUpper [] = []
+fstUpper (x : xs) = toUpper x : xs
+
+-- add global FSM structures populated with init and action directive funcs
+mkFSMs :: Func -> M.Map DirectiveSub FSM -> M.Map DirectiveSub FSM
+mkFSMs f kvs = case funcDirective f of
+  Nothing -> kvs
+  Just (Directive dSub@(DFSM res st) dTy) ->
+    let (kvs', fsm) = maybe (M.insert dSub (FSM {resourceTy = res, stateTy = st, initCons = [], actions = []}) kvs, FSM {resourceTy = res, stateTy = st, initCons = [], actions = []}) (kvs,) (M.lookup dSub kvs)
+     in case dTy of
+          DAction {directiveReturns, directiveStTrans} ->
+            let actionNew =
+                  Action
+                    { actionName = fstUpper $ funcName f,
+                      actionRetTy = directiveReturns,
+                      actionStTrans = directiveStTrans
+                    }
+             in M.adjust (\x -> let actionsOld = actions x in x {actions = actionNew : actionsOld}) dSub kvs'
+          DInit -> M.adjust (\x -> let initConsOld = initCons x in x {initCons = f : initConsOld}) dSub kvs'
+          _ -> kvs'
 
 pEff :: Parser Eff
 pEff = do
@@ -138,9 +155,63 @@ pEff = do
   _ <- pSpaces $ char ']'
   pure eff
 
+pDirectiveSub :: Parser DirectiveSub
+pDirectiveSub = do
+  _ <- pSpaces $ string "FSM"
+  (res, st) <- pSpaces $ pParens $ (,) <$> pPTy <*> (pSpaces (char ',') >> pPTy)
+  pure (DFSM res st)
+
+pStTrans :: Parser (PTm, PTm)
+pStTrans = do
+  _ <- pSpaces $ char '['
+  stIn <- pSpaces pPTm
+  stOut <- try (pSpaces (string "-->") >> pSpaces pPTm) <|> pure stIn
+  _ <- pSpaces $ char ']'
+  pure (stIn, stOut)
+
+pDAction :: Parser Directive
+pDAction = do
+  _ <- pSpaces $ string "#action"
+  directiveSub <- pSpaces pDirectiveSub
+  directiveReturns <- try (string "returns" >> (,) <$> pSpaces pPTy <*> optional (pSpaces pLowerStr)) <|> pure (PTyUnit, Nothing)
+  directiveStTrans <- pSpaces pStTrans
+  pure $
+    Directive
+      directiveSub
+      DAction
+        { directiveReturns,
+          directiveStTrans
+        }
+
+pDInit :: Parser Directive
+pDInit = do
+  _ <- pSpaces $ string "#init"
+  directiveSub <- pSpaces pDirectiveSub
+  pure $ Directive directiveSub DInit
+
+pDRun :: Parser Directive
+pDRun = do
+  _ <- pSpaces $ string "#run"
+  directiveSub <- pSpaces pDirectiveSub
+  directiveReturns <- try (string "returns" >> (,) <$> pSpaces pPTy <*> optional (pSpaces pLowerStr)) <|> pure (PTyUnit, Nothing)
+  directiveWith <- pSpaces (string "with") >> pSpaces (string "this") >> pSpaces (char '=') >> pPTm
+  directiveStTrans <- pSpaces pStTrans
+  pure $
+    Directive
+      directiveSub
+      DRun
+        { directiveReturns,
+          directiveWith,
+          directiveStTrans
+        }
+
+pDirective :: Parser Directive
+pDirective = try (pSpaces pDAction) <|> try (pSpaces pDInit) <|> try (pSpaces pDRun)
+
 pFunc :: Parser Func
 pFunc = do
-  funcEff <- try (Just <$> pSpaces pEff) <|> pure Nothing
+  funcDirective <- optional (pSpaces pDirective)
+  funcEff <- optional (pSpaces pEff)
   _ <- pSpaces $ string "func"
   funcName <- pSpaces pLowerStr
   impArgs <- try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> try (pSpaces (pAngles pFuncArgs)) <|> pure []
@@ -154,8 +225,8 @@ pFunc = do
         funcArgs,
         funcRetTy,
         funcBody,
-        funcEff, 
-        funcRun=Nothing
+        funcEff,
+        funcDirective
       }
 
 mkAnnParam :: Bool -> (PTy, String) -> AnnParam
@@ -198,7 +269,8 @@ pTyDecl = do
   impArgs <- try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> pSpaces (pAngles pFuncArgs) <|> pure []
   expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs) <|> pure []
   let tyDeclParams = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
-  tyDeclConstructors <- pSpaces $ pCurlies $ many pTyDeclConstructor
+  cons <- pSpaces $ pCurlies $ many pTyDeclConstructor
+  let tyDeclConstructors = map (\c -> if conTy c == PTyHole then c {conTy = PTyCustom {tyName = tyDeclName, tyParams = map (PTmPTy . fst) expArgs}} else c) cons
   pure $
     TyDecl
       { tyDeclName,
@@ -210,11 +282,10 @@ pTyDeclConstructor :: Parser Constructor
 pTyDeclConstructor = do
   _ <- pSpaces $ string "constructor"
   conName <- pSpaces pUpperStr
-  impArgs <- try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> pSpaces (pAngles pFuncArgs) <|> pure []
-  expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs) <|> pure []
+  impArgs <- try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> try (pSpaces (pAngles pFuncArgs)) <|> pure []
+  expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> try (pSpaces (pParens pFuncArgs)) <|> pure []
   let conArgs = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
-  _ <- pSpaces $ string "of"
-  conTy <- pSpaces pPTy
+  conTy <- try (pSpaces $ string "of" >> pSpaces pPTy) <|> pure PTyHole
   _ <- pSpaces $ char ';'
   pure $
     Constructor
@@ -226,14 +297,18 @@ pTyDeclConstructor = do
 pRecDecl :: Parser RecDecl
 pRecDecl = do
   _ <- pSpaces $ string "record"
-  recDeclName <- pSpaces pUpperStr
+  recDeclTyName <- pSpaces pUpperStr
   impArgs <- try ((pSpaces (char '<') >> pSpaces (char '>')) >> pure []) <|> pSpaces (pAngles pFuncArgs) <|> pure []
   expArgs <- try ((pSpaces (char '(') >> pSpaces (char ')')) >> pure []) <|> pSpaces (pParens pFuncArgs) <|> pure []
+  _ <- pSpaces $ string "with"
+  _ <- pSpaces $ string "constructor"
+  recDeclConName <- pSpaces pUpperStr
   let recDeclParams = map (mkAnnParam False) impArgs ++ map (mkAnnParam True) expArgs
   recDeclFields <- pSpaces $ pCurlies $ many pRecDeclField
   pure $
     RecDecl
-      { recDeclName,
+      { recDeclTyName,
+        recDeclConName,
         recDeclParams,
         recDeclFields
       }
@@ -272,7 +347,7 @@ pPTyTy :: Parser PTy
 pPTyTy = string "Ty" >> pure PTyTy
 
 pPTyUnit :: Parser PTy
-pPTyUnit = string "Void" >> pure PTyUnit
+pPTyUnit = string "()" >> pure PTyUnit
 
 pAssign :: Parser Stmt
 pAssign = do
@@ -293,7 +368,7 @@ pDeclAssign = do
 pSkip :: Parser Stmt
 pSkip = do
   _ <- pSpaces $ string ";;"
-  pure $ StSkip
+  pure StSkip
 
 pWhile :: Parser Stmt
 pWhile = do
@@ -341,8 +416,8 @@ pStmt = StBlock <$> some pStmt0
 pStmt0 :: Parser Stmt
 pStmt0 =
   try pSkip
-    <|> try pDeclAssign
     <|> try pAssign
+    <|> try pDeclAssign
     <|> try pWhile
     <|> try pEWhile
     <|> try pStReturn
@@ -479,13 +554,15 @@ pStSwitch = do
           defaultCase
         }
 
-pStDot :: Parser Stmt 
+pStDot :: Parser Stmt
 pStDot = do
-  t1 <- pSpaces pPTm0
-  _ <- char '.'
+  t1 <- (pSpaces (string "IO") >> pure Nothing) <|> Just <$> pSpaces pPTm0
+  _ <- pSpaces $ char '.'
   PTmFuncCall f xs <- pSpaces pFuncCall
   _ <- pSpaces $ char ';'
-  pure $ StDot t1 f xs
+  case t1 of
+    Just ty -> pure $ StDot ty f xs
+    Nothing -> pure $ StDot PTmIO f xs
 
 pDefault :: Parser Case
 pDefault = do
@@ -500,7 +577,7 @@ pDefault = do
 pCase :: Parser Case
 pCase = do
   _ <- pSpaces $ string "case"
-  caseOn <- pSpaces $ pParens $ pPTm `sepBy` char ','
+  caseOn <- pSpaces (pParens $ pPTm `sepBy` char ',') <|> (singleton <$> pSpaces pPTm)
   caseBody <- pSpaces $ pCurlies pStmt
   pure $
     Case
@@ -530,7 +607,7 @@ pPTyFunc :: Parser PTy
 pPTyFunc = do
   _ <- pSpaces $ string "Func"
   _ <- pSpaces $ char '('
-  tyFuncArgs <- pFuncArgs
+  tyFuncArgs <- pFuncArgs -- TODO
   _ <- pSpaces $ string "=>"
   tyFuncRetTy <- pSpaces pPTy
   _ <- pSpaces $ char ')'
@@ -540,15 +617,27 @@ pPTyFunc = do
         tyFuncRetTy
       }
 
-pTmDot :: Parser PTm 
+pTmDot :: Parser PTm
 pTmDot = do
-  t1 <- pSpaces pPTm0
+  t1 <- (pSpaces (string "IO") >> pure Nothing) <|> (pSpaces (string "this") >> pure (Just PTmThis)) <|> Just <$> pSpaces pPTm0
   _ <- char '.'
   PTmFuncCall f xs <- pSpaces pFuncCall
-  pure $ PTmDot t1 f xs
+  case t1 of
+    Just ty -> pure $ PTmDot ty f xs
+    Nothing -> pure $ PTmDot PTmIO f xs
+
+pTmDotRec :: Parser PTm
+pTmDotRec = do
+  t1 <- pSpaces pPTm0
+  _ <- char '.'
+  t2 <- pSpaces pPTm0
+  pure $ PTmDotRec t1 t2
 
 pTyHole :: Parser PTy
 pTyHole = pSpaces (char '?') >> pure PTyHole
+
+pPTmThis :: Parser PTm
+pPTmThis = pSpaces (string "this") >> pure PTmThis
 
 pPTy :: Parser PTy
 pPTy =
@@ -565,6 +654,8 @@ pPTy =
 pPTm1 :: Parser PTm
 pPTm1 =
   try pPlusPTm
+    <|> try pTmDot
+    <|> try pTmDotRec
     <|> try pTmMinus
     <|> try pTmMult
     <|> try pTmDiv
@@ -577,17 +668,18 @@ pPTm1 =
     <|> try pPTmCon
     <|> try pIf
     <|> try pTernary
-    <|> try pTmDot 
     <|> try pPTm0
 
 pPTm0 :: Parser PTm
 pPTm0 =
   try (pParens pPTm1)
+    <|> try pPTmThis
     <|> try pPTmVar
     <|> try pPTmWildCard
     <|> try pNat
     <|> try pBool
     <|> try pTmUnit
+    <|> try pTmString
     <|> try pTmNot
 
 pPTm :: Parser PTm

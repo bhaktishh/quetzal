@@ -19,35 +19,28 @@ record DStore where
     secret : String 
     pub : String
 
-initStore : DStore 
-initStore = MkDStore { secret="secret data :O\n", pub="public data\n" }
+initStore : IO (IORef DStore)
+initStore = newIORef $ MkDStore { secret="secret data :O\n", pub="public data\n" }
 
-login : DStore -> IO (LoginResult, DStore)
-login store = do
+run : IORef DStore -> Store t st1 st2 -> IO t
+run store Login = do
   putStr "enter password: "
   pw <- getLine
   if pw == "password123"
     then do
-      pure (OK, store)
+      pure OK
     else do
-      pure (BadPassword, store)
-
-logout : DStore -> IO ((), DStore)
-logout store = do 
+      pure BadPassword  
+run store Logout = do 
     putStrLn "logging out"
-    pure ((), store)
-
-readSecret : DStore -> IO (String, DStore)
-readSecret store = pure (store.secret, store)
-
-run : DStore -> Store t st1 st2 -> IO (t, DStore)
-run store Login = login store 
-run store Logout = logout store 
-run store ReadSecret = readSecret store 
-run store (Pure x) = pure (x, store)
-run store (Lift io) = (,) <$> io <*> pure store
+    pure () 
+run store ReadSecret = do 
+    store <- readIORef store
+    pure store.secret
+run store (Pure x) = pure x
+run store (Lift io) = io
 run store (action >>= cont) = do 
-    (res, store) <- run store action
+    res <- run store action
     run store (cont res)
 
 main' : Store () LoggedOut (const LoggedOut)
@@ -62,8 +55,8 @@ main' = do
             _ <- Lift $ putStr "bad password"
             Pure () 
             
-main : IO t
+main : IO ()
 main = do 
-    let this = initStore 
-    (t, thisConc) <- run st main'
-    pure t
+    st <- initStore 
+    _ <- run st main'
+    pure ()

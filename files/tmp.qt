@@ -1,0 +1,16 @@
+func testLoop (Nat n) returns Nat {
+    Nat x = 11;
+    x = 12; 
+    if (x < 10) {
+        while (n < 10) {
+            x = x + 1;
+            n = n + 4;
+        }
+        n = n + 1;
+        return n;
+    }
+    else {
+        n = n + 2; 
+        return n + 4;
+    }
+}

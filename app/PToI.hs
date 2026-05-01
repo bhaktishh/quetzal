@@ -1,16 +1,15 @@
 {-# LANGUAGE NamedFieldPuns #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
 {-# HLINT ignore "Use if" #-}
-{- HLINT ignore "Redundant bracket" -}
+{-# LANGUAGE TupleSections #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module PToI where
 
 import qualified Data.Bifunctor
 import Data.Char (toLower, toUpper)
-import Data.List (nub, unsnoc)
+import Data.List (nub, nubBy, unsnoc)
 import qualified Data.Map as M
-import qualified Data.Maybe
+import Data.Maybe (fromMaybe, isNothing, maybeToList)
 import Data.Tuple (swap)
 import ITypes
 import PTypes
@@ -21,6 +20,7 @@ import PTypes
 
 trTm :: PTm -> ITm
 trTm (PTmNat n) = ITmNat n
+trTm (PTmString s) = ITmString s
 trTm (PTmPlus t1 t2) =
   let t1' = trTm t1
       t2' = trTm t2
@@ -44,9 +44,12 @@ trTm (PTmBAnd t1 t2) = ITmBAnd (trTm t1) (trTm t2)
 trTm (PTmBOr t1 t2) = ITmBOr (trTm t1) (trTm t2)
 trTm (PTmBLT t1 t2) = ITmBLT (trTm t1) (trTm t2)
 trTm (PTmList t1 xs) = ITmList (trTy t1) (map trTm xs)
-trTm (PTmFunc f) = ITmFunc (trFunc f)
 trTm (PTmDot t1 f args) = ITmFuncCall (trTm f) (trTm t1 : map trTm args)
 trTm (PTmTernary t1 t2 t3) = convIf (trTm t1) (trTm t2) (trTm t3)
+trTm (PTmDotRec a b) = ITmDot (trTm a) (trTm b)
+trTm (PTmPair a b) = ITmPair (trTm a) (trTm b)
+trTm PTmThis = ITmVar "this"
+trTm PTmIO = ITmVar "IO"
 
 trBool :: ITm -> ITm
 trBool (ITmBLT t1 t2) = ITmFuncCall (ITmVar "isLT") [t1, t2]
@@ -64,65 +67,66 @@ trPBool (PTmBOr t1 t2) = PTmBOr (trPBool t1) (trPBool t2)
 trPBool (PTmNot t) = PTmNot (trPBool t)
 trPBool x = x
 
--- takes a function body : Stmt and function itself : Func
--- converts into a IFunc body and where clause
-trBody :: Stmt -> Func -> (ITm, List ITm)
-trBody x f =
-  let argMap = mapFromFuncArgs (funcArgs f) M.empty
-      args = map (\(AnnParam (ty, str) _) -> (str, ty)) (funcArgs f)
-   in case x of
-        StBlock ls -> trListStmt ls argMap args f []
-        _ -> trListStmt [x] argMap args f []
-
---            stmt list   argmap              arglist               og func  where block  (func, where block)
-trListStmt :: List Stmt -> M.Map String PTy -> List (String, PTy) -> Func -> List ITm -> (ITm, List ITm)
-trListStmt [StSkip] _ _ _ _ = error "cannot end with skip i think"
-trListStmt (StSkip : xs) m ls f i = trListStmt xs m ls f i
-trListStmt [] _ _ _ i = (ITmUnit, i)
-trListStmt [StBlock s] m ls f i = trListStmt s m ls f i
-trListStmt (StBlock s : xs) m ls f i = trListStmt (s ++ xs) m ls f i
-trListStmt [StReturn t] _ _ _ i = (trTm t, i)
-trListStmt (StReturn _ : _) _ _ _ _ = error "return should be the last statement in the block"
-trListStmt (StIf t s1 s2 : xs) m ls f i =
-  let (t1, i1) = trListStmt (s1 : xs) m ls f i
-      (t2, i2) = trListStmt (s2 : xs) m ls f (i ++ i1)
-   in (ITmIf (trTm t) t1 t2, i ++ i2)
-trListStmt (StEIf t s1 s2 : xs) m ls f i =
-  let (t1, i1) = trListStmt (s1 : xs) m ls f i
-      (t2, i2) = trListStmt (s2 : xs) m ls f (i ++ i1)
-   in (convIf (trTm t) t1 t2, i ++ i2)
-trListStmt (StDeclAssign (Just ty) x t : xs) m ls f i =
-  let (t', i') = trListStmt xs (M.insert x ty m) (ls ++ [(x, ty)]) f i
-   in (ITmLet x (Just (trTy ty)) (trTm t) t', i ++ i')
-trListStmt (StDeclAssign Nothing x t : xs) m ls f i =
-  let (t', i') = trListStmt xs (M.insert x PTyHole m) (ls ++ [(x, PTyHole)]) f i
-   in (ITmLet x Nothing (trTm t) t', i ++ i')
-trListStmt (StAssign x t : xs) m ls f i =
-  let (t', i') = trListStmt xs m ls f i
-   in (ITmLet x (trTy <$> M.lookup x m) (trTm t) t', i ++ i')
-trListStmt (StWhile t s : xs) m ls f i =
-  let (body, innerName, innerParams) = defOuter (funcName f) (funcArgs f ++ map ((`AnnParam` True) . swap) ls) (length i)
-      innerFunc = defInner t s innerName (funcRetTy f) xs innerParams False
-   in (\(x, y) -> (x, ITmFunc (trFunc innerFunc) : y)) (trBody body f)
-trListStmt (StEWhile t s : xs) m ls f i =
-  let (body, innerName, innerParams) = defOuter (funcName f) (funcArgs f ++ map ((`AnnParam` True) . swap) ls) (length i)
-      innerFunc = defInner t s innerName (funcRetTy f) xs innerParams True
-   in (\(x, y) -> (x, ITmFunc (trFunc innerFunc) : y)) (trBody body f)
-trListStmt (StSwitch Switch {switchOn, cases, defaultCase} : xs) m ls f i =
-  let def = case defaultCase of
-        Nothing -> []
-        Just c -> [c]
-      tmp = map (\(Case {caseOn, caseBody}) -> (if null caseOn then replicate (length switchOn) ITmWildCard else map trTm caseOn, trListStmt (caseBody : xs) m ls f i)) (cases ++ def)
-      branches = map (\(tm, (st, i)) -> ((tm, st), i)) tmp
-   in ( ITmMatch
-          (map trTm switchOn)
-          (map fst branches),
-        i ++ concatMap snd branches
+trFunc :: Func -> M.Map String ITy -> IFunc
+-- when under a run directive, the function is run under the fsm idxm
+-- any IO statements must be lifted
+trFunc f@(Func {funcName, funcArgs, funcBody, funcRetTy, funcEff, funcDirective = d@(Just (Directive _ (DRun {directiveReturns = (dRet, mrvar), directiveWith, directiveStTrans = (stIn, stOut)})))}) m =
+  if funcRetTy == dRet
+    then
+      ( let args' = map trAnnParam funcArgs
+            outerLHS = ITmFuncCall (ITmVar funcName) (map (ITmVar . getIAnnParamVar) args')
+            str = fsmName d
+            iFuncName = funcName ++ "\'"
+            outerRHS = mkFSMExecOuterBody funcName directiveWith str
+            m' = M.insert "this" (ITyTm $ trTm directiveWith) m
+            innerLHS = ITmFuncCall (ITmVar iFuncName) (map (ITmVar . getIAnnParamVar) args')
+            (db, w) = trMonadListStmt f (funcDirective f) m' (unblock funcBody) []
+            innerRHS = ITmDo db
+            f' =
+              IFunc
+                { iFuncName,
+                  iFuncArgs = args',
+                  iFuncBody = [(innerLHS, innerRHS)],
+                  iFuncRetTy = ITyApp (ITyVar ("Idxm" ++ str)) [ITmTy (trTy funcRetTy), trTm stIn, mkStOut stOut mrvar],
+                  iWhere = w
+                }
+         in IFunc
+              { iFuncName = funcName,
+                iFuncArgs = args',
+                iFuncBody = [(outerLHS, outerRHS)],
+                iFuncRetTy = ITyIO (trTy funcRetTy),
+                iWhere = [ITmFunc f']
+              }
       )
-trListStmt (StDot x g args : xs) m ls f i =
-  let (t', i') = trListStmt xs m ls f i
-      var = if myShowTm x == "IO" then "_" else myShowTm x
-   in (ITmLet var Nothing (ITmFuncCall (trTm g) (trTm x : map trTm args)) t', i ++ i')
+    else error "return type in function and directive do not match"
+-- functions with action directives
+-- take in and return concrete resource
+-- TODO return mdir
+trFunc f@(Func {funcName, funcArgs, funcBody, funcRetTy, funcEff, funcDirective = d@(Just (Directive (DFSM resTy _) (DAction _ _)))}) m =
+  let iResTy = trTy resTy
+      args' = IAnnParam ("this", iResTy) True : map trAnnParam funcArgs
+      iFuncRetTy = maybe (ITyPair (trTy funcRetTy) iResTy) (const (ITyIO (ITyPair (trTy funcRetTy) iResTy))) funcEff
+      fLHS = ITmFuncCall (ITmVar funcName) (map (ITmVar . getIAnnParamVar) args')
+      (fRHS, w) = trMonadListStmt f d m (unblock funcBody) []
+   in IFunc
+        { iFuncName = funcName,
+          iFuncArgs = args',
+          iFuncBody = [(fLHS, ITmDo fRHS)],
+          iFuncRetTy,
+          iWhere = w
+        }
+-- IO and functions with no effect
+trFunc f@(Func {funcName, funcArgs, funcBody, funcRetTy, funcEff, funcDirective}) m =
+  let args' = map trAnnParam funcArgs
+      fLHS = ITmFuncCall (ITmVar funcName) (map (ITmVar . getIAnnParamVar) args')
+      (fRHS, w) = maybe (trListStmt f m (unblock funcBody) []) (const (let (rhs, w') = trMonadListStmt f Nothing m (unblock funcBody) [] in (ITmDo rhs, w'))) funcEff
+   in IFunc
+        { iFuncName = funcName,
+          iFuncArgs = args',
+          iFuncBody = [(fLHS, fRHS)],
+          iFuncRetTy = if isNothing funcEff then trTy funcRetTy else ITyIO (trTy funcRetTy),
+          iWhere = w
+        }
 
 trTy :: PTy -> ITy
 trTy PTyNat = ITyNat
@@ -130,10 +134,11 @@ trTy PTyBool = ITyBool
 trTy PTyUnit = ITyUnit
 trTy PTyTy = ITyTy
 trTy PTyFunc {tyFuncArgs, tyFuncRetTy} = ITyFunc $ map (\(x, y) -> (Just y, trTy x)) tyFuncArgs ++ [(Nothing, trTy tyFuncRetTy)]
-trTy PTyCustom {tyName, tyParams} = ITyCustom tyName (map trTm tyParams)
+trTy PTyCustom {tyName, tyParams} = ITyApp (ITyVar tyName) (map trTm tyParams)
 trTy (PTyPTm t) = ITyTm (trTm t)
 trTy (PTyList t) = ITyList (trTy t)
 trTy PTyHole = ITyHole
+trTy (PTyPair x y) = ITyPair (trTy x) (trTy y)
 
 trDecl :: Decl -> IDecl
 trDecl (PTy tydecl) = ITy $ trTyDecl tydecl
@@ -155,104 +160,234 @@ trTyDecl
 trRecDecl :: RecDecl -> IRecDecl
 trRecDecl
   RecDecl
-    { recDeclName,
+    { recDeclTyName,
+      recDeclConName,
       recDeclParams,
       recDeclFields
     } =
     IRecDecl
-      { iRecDeclName = recDeclName,
+      { iRecDeclName = recDeclTyName,
         iRecDeclParams = map trAnnParam recDeclParams,
-        iRecDeclConstructor = "Mk" ++ recDeclName,
+        iRecDeclConstructor = recDeclConName,
         iRecDeclFields = map (trAnnParam . (`AnnParam` True)) recDeclFields
       }
 
-trFunc :: Func -> IFunc
-trFunc f@Func {funcName, funcRetTy, funcArgs, funcBody, funcEff = Just IO, funcRun} =
-  let (b, w) = trIOBody funcBody f
-      iFuncArgs = map trAnnParam funcArgs
-   in IFunc
-        { iFuncName = funcName,
-          iFuncRetTy = ITyIO (trTy funcRetTy),
-          iFuncArgs,
-          iFuncBody = [(ITmCon funcName (map (ITmVar . getIAnnParamVar) iFuncArgs), b)],
-          iWhere = w
-        }
-trFunc
-  f@Func
-    { funcName,
-      funcRetTy,
-      funcArgs,
-      funcBody,
-      funcEff
-    } =
-    let (b, w) = trBody funcBody f
-        iFuncArgs = map trAnnParam funcArgs
-     in IFunc
-          { iFuncName = funcName,
-            iFuncRetTy = trTy funcRetTy,
-            iFuncArgs,
-            iFuncBody = [(ITmCon funcName (map (ITmVar . getIAnnParamVar) iFuncArgs), b)],
-            iWhere = w
+-- TODO decide what to do with resConc
+-- outerFuncName    initVar, initCall  <resTy>_<stTy>
+mkFSMExecOuterBody :: String -> PTm -> String -> ITm
+mkFSMExecOuterBody f initCall str =
+  let runFunc = "run" ++ str
+      (resVal, resConc) = (ITmVar "resVal", ITmVar "resConc")
+      f' = f ++ "\'"
+   in ITmDo
+        [ ITmDoLet "this" Nothing (trTm initCall),
+          -- todo change for ioref
+          ITmDoBind [resVal, resConc] (ITmFuncCall (ITmVar runFunc) [ITmVar "this", ITmVar f']),
+          ITmDoPure resVal
+        ]
+
+mkUpper :: PTm -> PTm
+mkUpper (PTmVar (x : xs)) = PTmVar $ toUpper x : xs
+mkUpper (PTmCon (x : xs) args) = PTmCon (toUpper x : xs) args
+mkUpper (PTmFuncCall t []) = mkUpper t
+mkUpper x = x
+
+unblock :: Stmt -> List Stmt
+unblock (StBlock s) = s
+unblock x = [x]
+
+-- args      og func  ctx map             body         where        (body, where)
+trListStmt :: Func -> M.Map String ITy -> List Stmt -> List ITm -> (ITm, List ITm)
+trListStmt _ _ [StReturn t] w = (trTm t, w)
+trListStmt _ _ [] w = (ITmUnit, w)
+trListStmt _ _ (StBlock _ : _) _ = error "no TL block inside block allowed"
+trListStmt f ctx (StDeclAssign mty lhs rhs : xs) w =
+  let (rest, w') = trListStmt f (M.insert lhs (maybe ITyHole trTy mty) ctx) xs w
+   in (ITmLet lhs (trTy <$> mty) (trTm rhs) rest, w')
+trListStmt f ctx (StSkip : xs) w = trListStmt f ctx xs w
+trListStmt _ _ (StReturn _ : _) _ = error "return should be the last statement in the block"
+trListStmt f ctx (StIf t s1 s2 : xs) w =
+  let (t1, w1) = trListStmt f ctx (unblock s1 ++ xs) w
+      (t2, w2) = trListStmt f ctx (unblock s2 ++ xs) w
+   in (ITmIf (trTm t) t1 t2, nub (w1 ++ w2))
+trListStmt f ctx (StEIf t s1 s2 : xs) w =
+  let (t1, w1) = trListStmt f ctx (unblock s1 ++ xs) w
+      (t2, w2) = trListStmt f ctx (unblock s2 ++ xs) w
+   in (convIf (trTm t) t1 t2, nub (w1 ++ w2))
+trListStmt f ctx (StAssign x t : xs) w =
+  let (t', w') = trListStmt f ctx xs w
+   in (ITmLet x (M.lookup x ctx) (trTm t) t', w')
+trListStmt f ctx (StDot x g args : xs) w =
+  let (t', w') = trListStmt f ctx xs w
+   in (ITmLet (myShowTm x) Nothing (ITmFuncCall (trTm g) (trTm x : map trTm args)) t', w')
+trListStmt f ctx (StWhile condition body : xs) w = trWhile f ctx condition body xs w False
+trListStmt f ctx (StEWhile condition body : xs) w = trWhile f ctx condition body xs w True
+trListStmt f ctx (StSwitch (Switch {switchOn, cases, defaultCase}) : xs) w =
+  let tmp = map (\(Case caseOn caseBody) -> (if null caseOn then replicate (length switchOn) ITmWildCard else map trTm caseOn, trListStmt f ctx (unblock caseBody ++ xs) w)) (cases ++ maybeToList defaultCase)
+      branches = map (\(caseOn, (itm, w')) -> ((caseOn, itm), w')) tmp
+   in (ITmMatch (map trTm switchOn) (map fst branches), concatMap snd branches)
+
+-- returns funcBody : ITm, funcWhere : [ITm]
+trWhile :: Func -> M.Map String ITy -> PTm -> Stmt -> List Stmt -> List ITm -> Bool -> (ITm, [ITm])
+trWhile f ctx condition body xs w isE =
+  let f_rec_name = funcName f ++ "_rec" ++ show (length w)
+      args = nubBy (\x y -> getIAnnParamVar x == getIAnnParamVar y) $ map trAnnParam (funcArgs f) ++ map (`IAnnParam` True) (M.toList ctx)
+      iArgsVars = map (ITmVar . getIAnnParamVar) args
+      argsVars = map (PTmVar . getIAnnParamVar) args
+      rCall = PTmFuncCall (PTmVar f_rec_name) argsVars
+      (bdy, w') = trListStmt f ctx (unblock body ++ [StReturn rCall]) w
+      innerFunc =
+        IFunc
+          { iFuncName = f_rec_name,
+            iFuncArgs = args,
+            iFuncBody = [],
+            iFuncRetTy = trTy (funcRetTy f),
+            iWhere = []
           }
+      (rest, w'') = trListStmt f ctx xs w
+      innerBodyLHS = ITmFuncCall (ITmVar f_rec_name) iArgsVars
+      innerBodyRHS = (if isE then convIf else ITmIf) (trTm condition) bdy rest
+      innerFunc' = innerFunc {iFuncBody = [(innerBodyLHS, innerBodyRHS)]}
+   in (trTm rCall, ITmFunc innerFunc' : nub (w' ++ w''))
 
-trIOBody :: Stmt -> Func -> (ITm, List ITm)
-trIOBody x f =
-  -- make map of args from varname to ty
-  let argMap = mapFromFuncArgs (funcArgs f) M.empty
-      args = map (\(AnnParam (ty, str) _) -> (str, ty)) (funcArgs f)
-   in case x of
-        StBlock ls -> (Data.Bifunctor.first ITmDo) $ trListIOStmt ls argMap args f []
-        _ -> (Data.Bifunctor.first ITmDo) $ trListIOStmt [x] argMap args f []
+fsmName :: Maybe Directive -> String
+fsmName (Just (Directive (DFSM resourceTy stateTy) _)) = myShowTy resourceTy ++ "_" ++ myShowTy stateTy
+fsmName Nothing = error "no directive!"
 
-mkUpper :: PTm -> PTm 
-mkUpper (PTmVar x) = PTmVar (mkICon x)
-mkUpper x = id x
+-- three cases: fsm exec, fsm action, IO
+-- fsm exec and fsm action need access to `this` variable
+-- fsm action needs to return pair of rval and resource
+-- fsm exec needs to lift to IO if IO is used
+-- lifting is only done in run function helper
+-- args           og func  monad info      ctx map            body          where       (body, where)
+trMonadListStmt :: Func -> Maybe Directive -> M.Map String ITy -> List Stmt -> List ITm -> (List ITmDo, List ITm)
+--------------------------------------------------------------------------
+-- block must end with return statement
+-- for actions, add resource variable (this) to return
+trMonadListStmt _ (Just (Directive _ (DAction _ _))) _ [StReturn tm] w = ([ITmDoPure (ITmPair (trTm tm) (ITmVar "this"))], w)
+-- for run functions (inner), return `Pure<fsmName>` tm
+trMonadListStmt _ d@(Just (Directive _ (DRun {}))) _ [StReturn tm] w =
+  let pureTm = "Pure" ++ fsmName d
+   in ([ITmDoTm (ITmFuncCall (ITmVar pureTm) [trTm tm])], w)
+-- for pure monadic functions, simply wrap in pure
+trMonadListStmt _ Nothing _ [StReturn tm] w = ([ITmDoPure (trTm tm)], w)
+--------------------------------------------------------------------------
+-- if end of block does not have a return statement, insert one
+-- for actions, add resource variable (this) to return
+trMonadListStmt _ (Just (Directive _ (DAction _ _))) _ [] w = ([ITmDoPure (ITmPair ITmUnit (ITmVar "this"))], w)
+-- for run statements, return `Pure<fsmName> ()`
+trMonadListStmt _ d@(Just (Directive _ (DRun {}))) _ [] w =
+  let pureTm = "Pure" ++ fsmName d
+   in ([ITmDoTm (ITmFuncCall (ITmVar pureTm) [ITmUnit])], w)
+-- for monads with no directive, simply wrap in pure
+trMonadListStmt _ _ _ [] w = ([ITmDoPure ITmUnit], w)
+---------------------------------------------------------------------------
+trMonadListStmt _ _ _ (StBlock _ : _) _ = error "no TL block inside block allowed"
+trMonadListStmt g mdir ctx (StDeclAssign mty lhs rhs : xs) w =
+  let imty = trTy <$> mty
+      (rest, w') = trMonadListStmt g mdir (M.insert lhs (fromMaybe ITyHole imty) ctx) xs w
+   in case rhs of
+        PTmDot x f args ->
+          let tm = case (mdir, x) of
+                -- action directive, bind to pair with `this`, and add `this` to function args
+                (Just (Directive _ (DAction {})), PTmThis) -> ITmDoBind [ITmVar lhs, ITmVar "this"] (ITmFuncCall (trTm f) (trTm x : map trTm args))
+                -- (Just str, PTmVar v) | str == v -> ITmDoBind [ITmVar lhs, ITmVar str] (ITmFuncCall (trTm f) (trTm x : map trTm args))
+                -- run directive, transform from function to uppercase constructor
+                (Just (Directive _ (DRun {})), PTmThis) ->
+                  let fCon = mkUpper f
+                   in ITmDoBind [ITmVar lhs] (trTm fCon)
+                -- run directive, lift IO
+                (Just (Directive _ (DRun {})), PTmIO) ->
+                  let lift = "Lift" ++ fsmName (funcDirective g)
+                   in ITmDoBind [ITmVar lhs] (ITmFuncCall (ITmVar lift) [ITmFuncCall (trTm f) (map trTm args)])
+                -- anything else, IO function
+                (_, PTmIO) -> ITmDoBind [ITmVar lhs] (ITmFuncCall (trTm f) (map trTm args))
+                (_, _) -> error $ "incorrect use of dot notation: mdir= " ++ show mdir ++ ", x= " ++ show x ++ ", fName = " ++ funcName g
+           in (tm : rest, w')
+        _ ->
+          let tm = ITmDoLet lhs imty (trTm rhs)
+           in (tm : rest, w ++ w')
+trMonadListStmt g mdir ctx (StAssign var tm : xs) w = case M.lookup var ctx of
+  Nothing -> error "assign without declare"
+  Just ty ->
+    let (rest, w') = trMonadListStmt g mdir ctx xs w
+     in case tm of
+          PTmDot x f args ->
+            let itm = case (mdir, x) of
+                  -- IO call in IO function
+                  (Nothing, PTmIO) -> ITmDoBind [ITmVar var] (ITmFuncCall (trTm f) (map trTm args))
+                  -- this in action
+                  (Just (Directive _ (DAction {})), PTmThis) -> ITmDoBind [ITmVar var, ITmVar "this"] (ITmFuncCall (trTm f) (trTm x : map trTm args))
+                  -- this in run
+                  (Just (Directive _ (DRun {})), PTmThis) ->
+                    let fCon = mkUpper f
+                     in ITmDoBind [ITmVar var] (trTm fCon)
+                  -- IO in run
+                  (Just (Directive _ (DRun {})), PTmIO) ->
+                    let lift = "Lift" ++ fsmName (funcDirective g)
+                     in ITmDoBind [ITmVar var] (ITmFuncCall (ITmVar lift) [ITmFuncCall (trTm f) (map trTm args)])
+                  -- (Just str, PTmVar v) | str == v -> ITmDoBind [ITmVar var, ITmVar str] (ITmFuncCall (trTm f) (trTm x : map trTm args))
+                  (_, _) -> error "incorrect use of dot notation"
+             in (itm : rest, w')
+          _ ->
+            let itm = ITmDoLet var (Just ty) (trTm tm)
+             in (itm : rest, w')
+trMonadListStmt g mdir ctx (StDot x f args : xs) w =
+  let (rest, w') = trMonadListStmt g mdir ctx xs w
+      itm = case (mdir, x) of
+        -- bind to unit, this
+        (Just (Directive _ (DAction {})), PTmThis) -> ITmDoBind [ITmUnit, ITmVar "this"] (ITmFuncCall (trTm f) (ITmVar "this" : map trTm args))
+        -- transform to constructor, bind
+        (Just (Directive _ (DRun {})), PTmThis) -> ITmDoBind [ITmWildCard] (trTm (mkUpper f))
+        -- lift to IO, bind to _
+        (Just (Directive _ (DRun {})), PTmIO) -> ITmDoBind [ITmWildCard] (ITmFuncCall (ITmVar ("Lift" ++ fsmName (funcDirective g))) [ITmFuncCall (trTm f) (map trTm args)])
+        -- bind to _ so we can add an explicit return
+        (_, PTmIO) -> ITmDoBind [ITmWildCard] (ITmFuncCall (trTm f) (map trTm args))
+        (_, _) -> error ("incorrect use of dot notation: mdir = " ++ show mdir ++ ", x = " ++ show x)
+   in (itm : rest, w ++ w')
+trMonadListStmt f mdir ctx (StIf c t e : xs) w =
+  let (t', wt) = trMonadListStmt f mdir ctx (unblock t ++ xs) w
+      (e', we) = trMonadListStmt f mdir ctx (unblock e ++ xs) w
+   in ([ITmDoIf (trTm c) (ITmDo t') (ITmDo e')], nub (wt ++ we))
+trMonadListStmt f mdir ctx (StEIf c t e : xs) w =
+  let (t', wt) = trMonadListStmt f mdir ctx (unblock t ++ xs) w
+      (e', we) = trMonadListStmt f mdir ctx (unblock e ++ xs) w
+      itm = convIOIf (trTm c) (ITmDo t') (ITmDo e')
+   in ([itm], nub (wt ++ we))
+trMonadListStmt f mdir ctx (StSwitch (Switch switchOn cases defaultCase) : xs) w =
+  let tmp = map (\(Case caseOn caseBody) -> (if null caseOn then replicate (length switchOn) ITmWildCard else map trTm caseOn, trMonadListStmt f mdir ctx (unblock caseBody ++ xs) w)) (cases ++ maybeToList defaultCase)
+      branches = map (\(caseOn, (itm, w')) -> ((caseOn, ITmDo itm), w')) tmp
+   in ([ITmDoCase (map trTm switchOn) (map fst branches)], concatMap snd branches)
+trMonadListStmt f mdir ctx (StWhile condition body : xs) w = trMonadWhile f mdir ctx condition body xs w False
+trMonadListStmt f mdir ctx (StEWhile condition body : xs) w = trMonadWhile f mdir ctx condition body xs w True
+trMonadListStmt f mdir ctx (StSkip : xs) w = trMonadListStmt f mdir ctx xs w
+trMonadListStmt _ _ _ (StReturn _ : _) _ = error "return must be last statement in block"
 
--- for functions with an IO effect
---            stmt list   argmap              arglist               og func  where block  (func, where block)
-trListIOStmt :: List Stmt -> M.Map String PTy -> List (String, PTy) -> Func -> List ITm -> (List ITmDo, List ITm)
-trListIOStmt [StReturn t] _ _ _ i = ([ITmDoPure (trTm t)], i)
-trListIOStmt (StReturn _ : _) _ _ _ _ = error "return should be the last statement in the block"
-trListIOStmt (StDeclAssign mt v (PTmDot x g args) : xs) m ls f i =
-  let ty = Data.Maybe.fromMaybe PTyHole mt
-      ity = mt >>= Just . trTy
-      (t', i') = trListIOStmt xs (M.insert v ty m) (ls ++ [(v, ty)]) f i
-   in case funcRun f of 
-    Just run -> (ITmDoBind [v, myShowTm x] (ITmFuncCall (ITmVar run) (trTm x : trTm (mkUpper g) : map trTm args)) : t', i ++ i')
-    Nothing -> (ITmDoBind [v, myShowTm x] (ITmFuncCall (trTm g) (trTm x : map trTm args)) : t', i ++ i')
-trListIOStmt (StDeclAssign mt v t : xs) m ls f i =
-  let ty = Data.Maybe.fromMaybe PTyHole mt
-      ity = mt >>= Just . trTy
-      (t', i') = trListIOStmt xs (M.insert v ty m) (ls ++ [(v, ty)]) f i
-   in ((ITmDoLet v ity (trTm t) : t'), i ++ i')
-trListIOStmt (StAssign v (PTmDot x g args) : xs) m ls f i =
-  let (t', i') = trListIOStmt xs m ls f i
-   in case funcRun f of 
-    Just run -> (ITmDoBind [v, myShowTm x] (ITmFuncCall (ITmVar run) (trTm x : trTm (mkUpper g) : map trTm args)) : t', i ++ i')
-    Nothing -> (ITmDoBind [v, myShowTm x] (ITmFuncCall (trTm g) (trTm x : map trTm args)) : t', i ++ i')
-trListIOStmt (StAssign x t : xs) m ls f i =
-  let (t', i') = trListIOStmt xs m ls f i
-   in (ITmDoLet x (trTy <$> M.lookup x m) (trTm t) : t', i ++ i')
-trListIOStmt (StDot x g args : xs) m ls f i =
-  let (t', i') = trListIOStmt xs m ls f i
-   in case funcRun f of 
-    Just run -> (ITmDoBind [myShowTm x] (ITmFuncCall (ITmVar run) (trTm x : trTm (mkUpper g) : map trTm args)) : t', i ++ i')
-    Nothing -> (ITmDoBind [myShowTm x] (ITmFuncCall (trTm g) (trTm x : map trTm args)) : t', i ++ i')
-trListIOStmt (StSwitch Switch {switchOn, cases, defaultCase} : xs) m ls f i =
-  let def = case defaultCase of
-        Nothing -> []
-        Just c -> [c]
-      tmp = map (\(Case {caseOn, caseBody}) -> (if null caseOn then replicate (length switchOn) ITmWildCard else map trTm caseOn, trListIOStmt (caseBody : xs) m ls f i)) (cases ++ def)
-      branches = map (\(tm, (st, i)) -> ((tm, ITmDo st), i)) tmp
-   in ( [ ITmDoCase
-            (map trTm switchOn)
-            (map fst branches)
-        ],
-        i ++ concatMap snd branches
-      )
-trListIOStmt xs m ls f i = let 
-  (a, b) = trListStmt xs m ls f i 
-  in ([ITmDoPure a], b) -- TODO 
+-- args:= og func -> <IO | fsm> -> ctx -> cond -> bdy -> tail -> where block -> isEWhile
+-- returns:= funcBody : List ITmDo, funcWhere : List ITm
+trMonadWhile :: Func -> Maybe Directive -> M.Map String ITy -> PTm -> Stmt -> List Stmt -> List ITm -> Bool -> ([ITmDo], [ITm])
+trMonadWhile f mdir ctx condition body xs w isE =
+  let f_rec_name = funcName f ++ "_rec" ++ show (length w)
+      args = nub $ map trAnnParam (funcArgs f) ++ map (`IAnnParam` True) (M.toList ctx)
+      argsVars = map (ITmVar . getIAnnParamVar) args
+      rCall = ITmDoPure $ ITmFuncCall (ITmVar f_rec_name) argsVars
+      (bdy, w') = trMonadListStmt f mdir ctx (unblock body) w
+      innerFunc =
+        IFunc
+          { iFuncName = f_rec_name,
+            iFuncArgs = args,
+            iFuncBody = [],
+            iFuncRetTy = trTy (funcRetTy f),
+            iWhere = []
+          }
+      (rest, w'') = trMonadListStmt f mdir ctx xs w
+      innerBodyLHS = ITmFuncCall (ITmVar f_rec_name) argsVars
+      innerBodyRHS = ITmDo [(if isE then convIOIf else ITmDoIf) (trTm condition) (ITmDo (bdy ++ [rCall])) (ITmDo rest)]
+      innerFunc' = innerFunc {iFuncBody = [(innerBodyLHS, innerBodyRHS)]}
+   in ([rCall], ITmFunc innerFunc' : nub (w' ++ w''))
+
+convIOIf :: ITm -> ITm -> ITm -> ITmDo
+convIOIf c t e = ITmDoCase [trBool c] [([ITmCon "Yes" [ITmVar "Refl"]], t), ([ITmCon "No" [ITmVar "noprf"]], e)]
 
 trConstructor :: Constructor -> IConstructor
 trConstructor
@@ -279,78 +414,81 @@ mkIFun :: String -> String
 mkIFun [] = error "empty constructor"
 mkIFun (x : xs) = toLower x : xs
 
--- given name of idxm and action
-trAction :: String -> Action -> (IConstructor, IFunc)
-trAction name (Action {actionName, actionRetTy = (AnnParam (rty, rvar) _), actionStTrans, actionFunc}) =
-  ( IConstructor
-      { iConName = mkICon actionName,
-        iConArgs = [],
-        iConTy = ITyCustom name [ITmTy (trTy rty), trTm (fst actionStTrans), ITmLam [ITmVar rvar] (trTm (snd actionStTrans))]
-      },
-    trFunc actionFunc
-  )
+--         stOut  mrvar
+mkStOut :: PTm -> Maybe String -> ITm
+mkStOut mstOut = maybe (ITmFuncCall (ITmVar "const") [trTm mstOut]) (\var -> ITmLam [ITmVar var] (trTm mstOut))
 
--- run resource (action >>= cont) = run resource action >>= (\res, resource => run resource (cont res))
-mkRunBind :: String -> String -> (ITm, ITm)
-mkRunBind funcName str =
+-- given name of idxm, resource and action
+-- TODO translate IORefs
+trAction :: String -> Action -> IConstructor
+trAction name (Action {actionName, actionRetTy = (rty, mrvar), actionStTrans}) =
+  let stIn = trTm (fst actionStTrans)
+      stOut = mkStOut (snd actionStTrans) mrvar
+   in IConstructor
+        { iConName = mkICon actionName,
+          iConArgs = [],
+          iConTy = ITyApp (ITyVar name) [ITmTy (trTy rty), stIn, stOut]
+        }
+
+-- run resource (action >>= cont) = do
+--    (res, resource) <- run resource action
+--    run store (cont res)
+mkRunBind :: String -> String -> String -> (ITm, ITm)
+mkRunBind _ funcName resVar =
   let action = ITmVar "action"
       cont = ITmVar "cont"
-      res = ITmVar "res"
       run = ITmVar funcName
-      resource = ITmVar str
-   in (ITmFuncCall run [resource, ITmBind action cont], ITmBind (ITmFuncCall run [resource, action]) (ITmLam [res, resource] (ITmFuncCall run [resource, ITmFuncCall cont [res]])))
+      resource = ITmVar resVar
+   in (ITmFuncCall run [resource, ITmBind action cont], ITmDo [ITmDoBind [ITmVar "res", resource] (ITmFuncCall run [resource, action]), ITmDoTm (ITmFuncCall run [resource, ITmFuncCall cont [ITmVar "res"]])])
 
--- run resource (pure x) = pure (x, resource)
-mkRunPure :: String -> String -> (ITm, ITm)
-mkRunPure funcName str =
+-- run resource (Pure<fsmName> x) = pure (x, resource)
+--         idxmName -> runFuncName -> resourceVar -> (LHS, RHS)
+mkRunPure :: String -> String -> String -> (ITm, ITm)
+mkRunPure fsmStr funcName resVar =
   let x = ITmVar "x"
-      vPure = ITmVar "Pure"
+      vPure = ITmVar $ "Pure" ++ fsmStr
       fPure = ITmVar "pure"
-      resource = ITmVar str
+      resource = ITmVar resVar
       run = ITmVar funcName
    in (ITmFuncCall run [resource, ITmFuncCall vPure [x]], ITmFuncCall fPure [ITmPair x resource])
 
--- run resource (Lift io) = (,) <$> io <*> pure resource
--- run resource (Lift io) = (<*>) ((<$>) (,) io)) (pure resource)
-mkRunLift :: String -> String -> (ITm, ITm)
-mkRunLift funcName str =
-  let resource = ITmVar str
+-- run resource (Lift<fsmName> io) = (\t => (t, resource)) <$> io
+mkRunLift :: String -> String -> String -> (ITm, ITm)
+mkRunLift fsmStr funcName resVar =
+  let resource = ITmVar resVar
       run = ITmVar funcName
-      pair = ITmVar "(,)"
-      fmap = ITmVar "(<$>)"
-      ap = ITmVar "(<*>)"
-      fPure = ITmVar "pure"
-      lift = ITmVar "Lift"
+      lift = ITmVar $ "Lift" ++ fsmStr
       io = ITmVar "io"
-   in (ITmFuncCall run [resource, ITmFuncCall lift [io]], ITmFuncCall ap [ITmFuncCall fmap [pair, io], ITmFuncCall fPure [resource]])
+      t = ITmVar "t"
+   in (ITmFuncCall run [resource, ITmFuncCall lift [io]], ITmFuncCall (ITmVar "map") [ITmLam [t] (ITmPair t resource), io])
 
--- Pure : (x : ty) -> Resource ty (st x) st
-mkConPure :: String -> IConstructor
-mkConPure resTy =
+-- Pure<fsmName> : (x : ty) -> resTy ty (st x) st
+mkConPure :: String -> String -> IConstructor
+mkConPure fsmStr resTy =
   let st = ITmVar "st"
       x = ITmVar "x"
       ty = ITmVar "ty"
    in IConstructor
-        { iConName = "Pure",
+        { iConName = "Pure" ++ fsmStr,
           iConArgs = [IAnnParam ("x", ITyTm ty) True],
-          iConTy = ITyCustom resTy [ty, (ITmFuncCall st [x]), st]
+          iConTy = ITyApp (ITyVar resTy) [ty, ITmFuncCall st [x], st]
         }
 
 --   Lift : IO ty -> Resource ty st (const st)
-mkConLift :: String -> IConstructor
-mkConLift resTy =
+mkConLift :: String -> String -> IConstructor
+mkConLift fsmStr resTy =
   let st = ITmVar "st"
       ty = ITmVar "ty"
       fConst = ITmVar "const"
    in IConstructor
-        { iConName = "Lift",
+        { iConName = "Lift" ++ fsmStr,
           iConArgs = [noAnnIParam (ITyIO (ITyTm ty))],
-          iConTy = ITyCustom resTy [ty, st, (ITmFuncCall fConst [st])]
+          iConTy = ITyApp (ITyVar resTy) [ty, st, ITmFuncCall fConst [st]]
         }
 
 -- (>>=) : Resource a st1 st2 -> ((x : a) -> Resource b (st2 x) st3) -> Resource b st1 st3
-mkConBind :: String -> IConstructor
-mkConBind resTy =
+mkConBind :: String -> String -> IConstructor
+mkConBind _ resTy =
   let st1 = ITmVar "st1"
       st2 = ITmVar "st2"
       st3 = ITmVar "st3"
@@ -358,54 +496,53 @@ mkConBind resTy =
       b = ITmVar "b"
    in IConstructor
         { iConName = "(>>=)",
-          iConArgs = [noAnnIParam (ITyCustom resTy [a, st1, st2]), noAnnIParam (ITyFunc [(Just "x", ITyTm a), (Nothing, ITyCustom resTy [b, (ITmFuncCall st2 [ITmVar "x"])])])],
-          iConTy = ITyCustom resTy [b, st1, st3]
+          iConArgs = [noAnnIParam (ITyApp (ITyVar resTy) [a, st1, st2]), noAnnIParam (ITyFunc [(Just "x", ITyTm a), (Nothing, ITyApp (ITyVar resTy) [b, ITmFuncCall st2 [ITmVar "x"], st3])])],
+          iConTy = ITyApp (ITyVar resTy) [b, st1, st3]
         }
 
 -- run resource Action = action resource
 mkRunAction :: String -> String -> String -> (ITm, ITm)
 mkRunAction fName strRes strAction =
   let resource = ITmVar strRes
-      action = ITmVar (mkIFun strAction)
-      actionCon = ITmCon strAction []
-   in (ITmFuncCall (ITmVar fName) [resource, actionCon], ITmFuncCall action [resource])
+      actionFunc = ITmVar (mkIFun strAction)
+      actionCon = ITmCon strAction [] -- todo what if args (later)
+   in (ITmFuncCall (ITmVar fName) [resource, actionCon], ITmFuncCall actionFunc [resource])
 
-mkRun :: IAnnParam -> ITyDecl -> IFunc
-mkRun concTy decl =
-  let resTy = iTyDeclName decl
-      iFuncName = "run" ++ resTy
-      mcons = map (\f -> f iFuncName resTy) [mkRunPure, mkRunBind, mkRunLift]
-      cons = map (mkRunAction iFuncName resTy . iConName) (iTyDeclConstructors decl)
-      iFuncBody = mcons ++ cons
-   in IFunc
+-- str = "<resourceTy>_<stateTy>"
+mkRun :: String -> ITy -> ITyDecl -> IFunc
+mkRun str concTy decl =
+  let idxmName = iTyDeclName decl
+      resVar = "resource"
+      iFuncName = "run" ++ str
+      mcons = map (\f -> f str iFuncName resVar) [mkRunPure, mkRunBind, mkRunLift]
+      cons = map (mkRunAction iFuncName resVar . iConName) (iTyDeclConstructors decl)
+      declArg = noAnnIParam (ITyApp (ITyVar idxmName) $ map ITmVar $ filter (not . null) $ zipWith (curry (\(IAnnParam (str, _) b, i) -> if b && not (null str) then str else if b then "var" ++ show i else "")) (iTyDeclParams decl) [1 ..])
+   in -- iFuncBody = mcons ++ cons
+      IFunc
         { iFuncName,
-          iFuncArgs = [noAnnIParam (getIAnnParamTy concTy), mkITyArg decl],
-          iFuncBody,
-          iFuncRetTy = ITyIO $ ITyPair (ITyTm (ITmVar "ty"), getIAnnParamTy concTy),
+          iFuncArgs = [noAnnIParam concTy, declArg],
+          iFuncBody = mcons ++ cons,
+          iFuncRetTy = ITyIO $ ITyPair (ITyTm (ITmVar "ty")) concTy,
           iWhere = []
         }
 
--- todo each function mapped to a constructor needs to be passed to trIOFunc somewhere 
-trFSM :: FSM -> IFSM
-trFSM FSM {resource, stateTy, initCons, actions, exec} =
-  let idxmName = "idxm" ++ myShowTy (getAnnParamPTy resource) -- todo ++ read resourcety
+trFSM :: FSM -> (ITyDecl, IFunc)
+trFSM FSM {resourceTy, stateTy, initCons, actions} =
+  let showFSM = myShowTy resourceTy ++ "_" ++ myShowTy stateTy
+      idxmName = "Idxm" ++ showFSM
       confuncs = map (trAction idxmName) actions
-      idxm =
+      iStateTy = trTy stateTy
+      idxm' =
         ITyDecl
           { iTyDeclName = idxmName,
-            iTyDeclParams = [IAnnParam ("ty", ITyTy) True, noAnnIParam (ITyCustom stateTy []), noAnnIParam (ITyFunc [(Nothing, ITyTm (ITmVar "ty")), (Nothing, ITyCustom stateTy [])])],
-            iTyDeclConstructors = map fst confuncs
+            iTyDeclParams = [IAnnParam ("ty", ITyTy) True, noAnnIParam iStateTy, noAnnIParam (ITyFunc [(Nothing, ITyTm (ITmVar "ty")), (Nothing, iStateTy)])],
+            -- we dont add the pure,bind,lift constructors here so that they are ignored in mkRun
+            iTyDeclConstructors = confuncs
           }
-      conc = trAnnParam resource
-      run = mkRun conc idxm
-      addRun f = f {funcRun = Just $ iFuncName run}
-   in IFSM
-        { idxm=idxm{iTyDeclConstructors = iTyDeclConstructors idxm ++ map (\f -> f idxmName) [mkConPure, mkConBind, mkConLift]},
-          conc,
-          funcs = map (trFunc . addRun . actionFunc) actions ++ map trFunc initCons,
-          run, 
-          iexec = (trFunc . addRun) exec
-        }
+      conc = trTy resourceTy
+      run = mkRun showFSM conc idxm'
+      idxm = idxm' {iTyDeclConstructors = confuncs ++ map (\f -> f showFSM idxmName) [mkConPure, mkConBind, mkConLift]}
+   in (idxm, run)
 
 -- -----------------------------
 -- AnnParam and IAnnParam utils
@@ -435,16 +572,13 @@ getIAnnParamTy (IAnnParam (_, ty) _) = ty
 noAnnIParam :: ITy -> IAnnParam
 noAnnIParam ty = IAnnParam ("", ty) True
 
-mkITyArg :: ITyDecl -> IAnnParam
-mkITyArg ITyDecl {iTyDeclName, iTyDeclParams, iTyDeclConstructors} = noAnnIParam (ITyCustom iTyDeclName (map (ITmVar . getIAnnParamVar) iTyDeclParams))
-
 -- --------------------------
 -- automatic generation of decidable equality
 -- ----------------------------
 
 -- dependent pattern matching via if statements
 convIf :: ITm -> ITm -> ITm -> ITm
-convIf c t e = ITmMatch [trBool c] [([ITmCon "No" [ITmVar "noprf"]], e), ([ITmCon "Yes" [ITmVar "yesprf"]], t)]
+convIf c t e = ITmMatch [trBool c] [([ITmCon "Yes" [ITmVar "Refl"]], t), ([ITmCon "No" [ITmVar "noprf"]], e)]
 
 mapFromFuncArgs :: List AnnParam -> M.Map String PTy -> M.Map String PTy
 mapFromFuncArgs [] m = m
@@ -452,43 +586,6 @@ mapFromFuncArgs ((AnnParam (ty, var) _) : xs) m = mapFromFuncArgs xs (M.insert v
 
 mapToAnnParam :: M.Map String PTy -> List AnnParam
 mapToAnnParam m = map (\(v, ty) -> AnnParam (ty, v) True) (M.toList m)
-
-defOuter :: String -> List AnnParam -> Int -> (Stmt, String, List AnnParam)
-defOuter funcName funcArgs i =
-  let funcInner = funcName ++ "_rec" ++ show i
-      ps = nubAnnParam M.empty funcArgs []
-   in ( StBlock [StReturn (PTmFuncCall (PTmVar funcInner) (nub $ map (PTmVar . getAnnParamVar) ps))],
-        funcInner,
-        ps
-      )
-
-defInner :: PTm -> Stmt -> String -> PTy -> List Stmt -> List AnnParam -> Bool -> Func
-defInner condition body fname retty tl ps e =
-  let ebdy =
-        StSwitch
-          Switch
-            { switchOn = [trPBool condition],
-              cases =
-                [ Case
-                    { caseOn = [PTmCon "No" [PTmVar "noprf"]],
-                      caseBody = StBlock tl
-                    },
-                  Case
-                    { caseOn = [PTmCon "Yes" [PTmVar "yesprf"]],
-                      caseBody = StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))]
-                    }
-                ],
-              defaultCase = Nothing
-            }
-      bdy = StIf condition (StBlock $ body : [StReturn (PTmFuncCall (PTmVar fname) (map (PTmVar . getAnnParamVar) ps))]) (StBlock tl)
-   in Func
-        { funcName = fname,
-          funcArgs = ps,
-          funcRetTy = retty,
-          funcBody = if e then ebdy else bdy, 
-          funcEff = Nothing, 
-          funcRun = Nothing
-        }
 
 dontDoTheseTypes :: [ITy]
 dontDoTheseTypes =
@@ -505,7 +602,7 @@ inConTyTm vname (ITmFuncCall _ xs) = any (inConTyTm vname) xs
 inConTyTm _ _ = False
 
 inConTy :: String -> ITy -> Bool
-inConTy vname (ITyCustom _ tms) = any (inConTyTm vname) tms
+inConTy vname (ITyApp _ tms) = any (inConTyTm vname) tms
 inConTy vname (ITyTm tm) = inConTyTm vname tm
 inConTy _ _ = False
 
@@ -529,7 +626,7 @@ deriveDecEq
               { iImplicits = implicits,
                 iConstraints = getConstraints iTyDeclParams,
                 iSubject = ITmCon iTyDeclName (map (ITmVar . getIAnnParamVar) iTyDeclParams),
-                iBody = concatMap (getCases . \(x, y) -> (tms "1" x, tms "2" y)) cases
+                iBody = concatMap (getCases . Data.Bifunctor.bimap (tms "1") (tms "2")) cases
               }
 deriveDecEq
   ( IRec
@@ -549,7 +646,7 @@ deriveDecEq
                 [ IConstructor
                     { iConName = iRecDeclConstructor,
                       iConArgs = iRecDeclFields,
-                      iConTy = ITyCustom iRecDeclName (map (ITmVar . getIAnnParamVar) iRecDeclParams)
+                      iConTy = ITyApp (ITyVar iRecDeclName) (map (ITmVar . getIAnnParamVar) iRecDeclParams)
                     }
                 ]
             }
@@ -569,15 +666,18 @@ getFuncConstraint fv args acc facc = case unsnoc args of
 
 -- args to match on
 getCases :: (ITm, ITm) -> List IImplCase
-getCases (c1@(ITmCon v1 args1), c2@(ITmCon v2 args2)) = case v1 == v2 of
-  True -> case length args1 == length args2 of
-    True -> case null args1 of
-      True -> [mkCase (c1, c2) [] Nothing (Tm $ ITmCon "Yes" [ITmVar "Refl"])]
-      False ->
-        let pairedargs = zip args1 args2
-         in doEverything v1 [] ([], Nothing) pairedargs
-    False -> error "dawg dis is Wrong"
-  False -> [mkCase (c1, c2) [] Nothing (Tm noImpossible)]
+getCases (c1@(ITmCon v1 args1), c2@(ITmCon v2 args2)) =
+  if v1 == v2
+    then
+      ( case length args1 == length args2 of
+          True -> case null args1 of
+            True -> [mkCase (c1, c2) [] Nothing (Tm $ ITmCon "Yes" [ITmVar "Refl"])]
+            False ->
+              let pairedargs = zip args1 args2
+               in doEverything v1 [] ([], Nothing) pairedargs
+          False -> error "dawg dis is Wrong"
+      )
+    else [mkCase (c1, c2) [] Nothing (Tm noImpossible)]
 getCases _ = error "pls no"
 
 noImpossible :: ITm
@@ -621,12 +721,12 @@ generateCases :: List IConstructor -> Maybe (List (IConstructor, IConstructor))
 generateCases [] = Just []
 generateCases [x] = Just [(x, x)]
 generateCases (x : y : xs) =
-  let xfst = (x, x) : map ((,) x) (filter (\x' -> tySame (iConTy x') (iConTy x)) (y : xs))
+  let xfst = (x, x) : map (x,) (filter (\x' -> tySame (iConTy x') (iConTy x)) (y : xs))
       xfst' = if tySame (iConTy y) (iConTy x) then xfst ++ [(y, x)] else xfst
    in (xfst' ++) <$> (if null xs then Just [(y, y)] else generateCases (y : xs))
 
 tySame :: ITy -> ITy -> Bool
-tySame (ITyCustom a xs) (ITyCustom b ys) = a == b && all tmSame (zip xs ys)
+tySame (ITyApp a xs) (ITyApp b ys) = a == b && all tmSame (zip xs ys)
 tySame (ITyTm t) (ITyTm u) = tmSame (t, u)
 tySame (ITyList t) (ITyList u) = tySame t u
 tySame (ITyFunc _) _ = False

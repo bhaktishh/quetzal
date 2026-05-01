@@ -1,29 +1,70 @@
+type Access {
+    constructor LoggedIn; 
+    constructor LoggedOut; 
+}
+
+type LoginResult {
+    constructor OK;
+    constructor BadPassword;
+}
+type Access = LoggedOut | LoggedIn 
+type LoginResult = OK | BadPassword 
+record Store {
+    String secret;
+    String pub; 
+}
+
 impl FSM {
-    resource = Store st;
-    stateTy = Access;
+    resource = Store st; 
+    stateType = Access;
 
     action login returns LoginResult r [LoggedOut --> (r == OK)? LoggedIn : LoggedOut];
     [IO] func login() returns LoginResult {
-        return 0; 
+        IO.putStr("enter password: ");
+        String pw = IO.getLine();
+        if (pw == "password123") {
+            return OK;
+        } else {
+            return BadPassword;
+        }
     }
+    
     action logout [LoggedIn --> LoggedOut];
     [IO] func logout() {
-        return 1; 
+        IO.putStr("logging out");
     }
 
     action readSecret returns String [LoggedIn];
     [IO] func readSecret() returns String {
-        return st;
+        return st.secret;
     }
-} with exec [IO] func main() {
-    String secret = secret; 
-    Store st = initStore(a, b);
+} with init func initStore() returns Store {
+    return Store("secret data :O", "public data");
+} with exec [IO] func main(Store st) [LoggedOut] {
     LoginResult res = st.login();
-    if (res == OK) {
+    eif (res == OK) {
         String secret = st.readSecret(); 
         IO.print(secret);
         st.logout();
     } else {
-        IO.print();
+        IO.print("bad password");
     }
+}
+
+
+interface FSM(Ty resourceTy, Ty stateTy) {
+    resourceTy resource; 
+    List(Action<t>) actions; 
+
+    where interface FSM(resourceTy, stateTy) => Action<t> {
+        stateTy inSt; 
+        Func(t r => stateTy) outSt; 
+        Func(() => t) actionFunc;
+    }
+}
+
+interface FSM<Ty resTy, Ty stTy>  {
+    resTy res;
+    List(Func(() => t), (stTy , Func (t r => stTy))) actions;
+    List(Func( _ => resTy)) inits;
 }

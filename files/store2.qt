@@ -13,10 +13,8 @@ record Store {
     String pub; 
 }
 
-impl FSM  {
-    resource = Store st;
-    stateTy = Access;
-
+impl FSM(Store, Access) {
+    Store st; 
     action login returns LoginResult r [LoggedOut --> (r == OK)? LoggedIn : LoggedOut];
     [IO] func login() returns LoginResult {
         IO.print("enter password");
@@ -37,16 +35,24 @@ impl FSM  {
     [IO] func readSecret() returns String {
         return st.secret;
     }
-} with init func initStore(String secret, String pub) returns Store {
-        return Store(secret, pub);
+} with init {
+    func mkStore(String secret, String pub) returns Store {
+        return Store(secret, pub); 
     }
-  with exec [IO] func main(Store st) [LoggedOut] {
-    LoginResult res = st.login();
-    if (res == OK) {
-        String secret = st.readSecret(); 
-        IO.print(secret);
-        st.logout();
-    } else {
-        IO.print("bad password");
+}
+
+... 
+
+run FSM(Store, Access) {
+    init Store st = mkStore("secret", "pub"); 
+    exec [IO] func main() [LoggedOut] {
+        LoginResult res = st.login();
+        if (res == OK) {
+            String secret = st.readSecret(); 
+            IO.print(secret);
+            st.logout();
+        } else {
+            IO.print("bad password");
+        }
     }
 }

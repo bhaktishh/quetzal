@@ -1,0 +1,58 @@
+type Access {
+    constructor LoggedIn;
+    constructor LoggedOut; 
+}
+
+type LoginResult {
+    constructor OK;
+    constructor BadPassword;
+}
+
+record Store {
+    String secret; 
+    String pub;
+}
+
+FSM(resourceType=Store, stateType=Access) {
+    Store this; -- TODO 
+
+    @action login returns LoginResult r [LoggedOut --> (r == OK) ? LoggedIn : LoggedOut]; 
+    [IO] func login() returns LoginResult {
+        IO.print("enter password");
+        String pw = IO.getLine();
+        if (pw == "password123") {
+            return OK;
+        } else {
+            return BadPassword;
+        }
+    }
+
+    @action logout [LoggedIn --> LoggedOut]; 
+    [IO] func logout() {
+        IO.print("logging out");
+    }
+
+    @action readSecret returns String [LoggedIn]; -- enter and exit function in the LoggedOut state 
+    func readSecret() returns String {
+        return this.secret;
+    }
+}
+
+-- @init FSM(A, B) must always return : A
+@init FSM(Store, Access) mkStore;
+func mkStore(String secret, String pub) returns Store {
+    return Store(secret, pub); 
+}
+
+@run FSM(Store, Access) [LoggedOut]
+    with this = mkStore("secret", "public"); -- must be @init function
+[IO] func main() {
+    LoginResult res = this.login(); 
+    if (res == OK) {
+        String secret = this.readSecret(); 
+        IO.print(secret);
+        this.logout();
+    } else {
+        IO.print("bad password");
+    }
+}

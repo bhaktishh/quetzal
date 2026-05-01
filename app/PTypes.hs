@@ -1,5 +1,8 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 module PTypes where
 
+import qualified Data.Map as M
 import GHC.TypeLits (Nat)
 
 type List a = [a]
@@ -24,13 +27,18 @@ data PTy
       }
   | PTyList PTy
   | PTyPTm PTm
+  | PTyPair PTy PTy
   | PTyHole
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 data PTm
   = PTmNat Nat
-  | PTmDot PTm PTm (List PTm) -- a.f() ---> let a = f a ; x = a.f(b, c) ---> let (x, a) = f a b c
+  | PTmThis
+  | PTmDotRec PTm PTm -- a.b = b field of record a
+  | PTmDot PTm PTm (List PTm) -- a.f() ---> let a = f a ; x = a.f(b, c) ---> (x, a) <- f a b c
   | PTmPlus PTm PTm
+  | PTmPair PTm PTm
+  | PTmString String
   | PTmMinus PTm PTm
   | PTmMult PTm PTm
   | PTmDiv PTm PTm
@@ -43,39 +51,45 @@ data PTm
   | PTmList PTy (List PTm)
   | PTmUnit
   | PTmNot PTm
+  | PTmIO
   | PTmPTy PTy
   | PTmVar String
   | PTmWildCard
   | PTmTernary PTm PTm PTm
   | PTmCon String (List PTm)
-  | PTmFunc Func
   | PTmFuncCall PTm (List PTm)
   | PTmIf PTm PTm PTm
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
-myShowTm :: PTm -> String   
-myShowTm (PTmNat x) = show x 
-myShowTm (PTmVar s) = s 
+-- when we need to use some term as a variable binding
+-- only applies to certain typeformers, others should not be used for implicit variable binding
+myShowTm :: PTm -> String
+myShowTm (PTmNat x) = show x
+myShowTm PTmThis = "this"
+myShowTm (PTmString s) = s
+myShowTm (PTmVar s) = s
+myShowTm (PTmCon c []) = c
 myShowTm PTmWildCard = "_"
-myShowTm x = show x 
+myShowTm (PTmPTy t) = myShowTy t
+myShowTm x = show x
 
-myShowTy :: PTy -> String 
+myShowTy :: PTy -> String
 myShowTy (PTyPTm t) = myShowTm t
-myShowTy (PTyCustom {tyName, tyParams}) = tyName 
-myShowTy x = show x 
+myShowTy (PTyCustom {tyName, tyParams = []}) = tyName
+myShowTy x = show x
 
 data Switch = Switch
   { switchOn :: List PTm,
     cases :: List Case,
     defaultCase :: Maybe Case
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 data Case = Case
   { caseOn :: List PTm,
     caseBody :: Stmt
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 data Stmt
   = StDeclAssign (Maybe PTy) String PTm
@@ -94,10 +108,10 @@ data Stmt
   | StBlock (List Stmt)
   | StSwitch Switch
   | StSkip
-  | StDot PTm PTm (List PTm )
-  deriving (Show, Eq)
+  | StDot PTm PTm (List PTm)
+  deriving (Show, Eq, Ord)
 
-data Eff = IO | Other deriving (Show, Eq)
+data Eff = IO | Other deriving (Show, Eq, Ord)
 
 data Func = Func
   { funcName :: String,
@@ -105,9 +119,9 @@ data Func = Func
     funcArgs :: List AnnParam,
     funcBody :: Stmt,
     funcEff :: Maybe Eff,
-    funcRun :: Maybe String -- run function if f associated with FSM
+    funcDirective :: Maybe Directive
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 data Decl = PTy TyDecl | Rec RecDecl
   deriving (Show, Eq)
@@ -120,7 +134,8 @@ data TyDecl = TyDecl
   deriving (Show, Eq)
 
 data RecDecl = RecDecl
-  { recDeclName :: String,
+  { recDeclTyName :: String,
+    recDeclConName :: String,
     recDeclParams :: List AnnParam,
     recDeclFields :: List (PTy, String)
   }
@@ -133,21 +148,37 @@ data Constructor = Constructor
   }
   deriving (Show, Eq)
 
-data AnnParam = AnnParam (PTy, String) Bool deriving (Show, Eq) -- explicit = true or false. default true
+data AnnParam = AnnParam (PTy, String) Bool deriving (Show, Eq, Ord) -- explicit = true or false. default true
 
 data Action = Action
   { actionName :: String,
-    actionRetTy :: AnnParam,
-    actionStTrans :: (PTm, PTm),
-    actionFunc :: Func
+    actionRetTy :: (PTy, Maybe String),
+    actionStTrans :: (PTm, PTm)
   }
   deriving (Show, Eq)
 
 data FSM = FSM
-  { resource :: AnnParam,
-    stateTy :: String,
+  { resourceTy :: PTy,
+    stateTy :: PTy,
     initCons :: List Func,
-    actions :: List Action,
-    exec :: Func 
+    actions :: List Action
   }
   deriving (Show, Eq)
+
+data DirectiveSub = DFSM PTy PTy deriving (Show, Eq, Ord) -- FSM(Store, Access) = DFSM Store Access
+
+data DirectiveTy
+  = DAction
+      { directiveReturns :: (PTy, Maybe String), -- eg returns LoginResult r
+        directiveStTrans :: (PTm, PTm)
+      }
+  | DInit
+  | DRun
+      { directiveReturns :: (PTy, Maybe String),
+        directiveWith :: PTm, -- eg with this = mkStore("secret", "pub")
+        directiveStTrans :: (PTm, PTm)
+      }
+  deriving (Show, Eq, Ord)
+
+data Directive = Directive DirectiveSub DirectiveTy
+  deriving (Show, Eq, Ord)

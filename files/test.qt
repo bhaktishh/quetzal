@@ -1,3 +1,9 @@
+-- single line comment
+
+{-- this is a
+    multiline  
+    comment --} 
+
 type ElevatorState() {
     constructor Open() of ElevatorState();
     constructor Closed() of ElevatorState();
@@ -53,6 +59,12 @@ type Access() {
     constructor LoggedIn;
 }
 
+enum PaymentStatus {
+    NotEnoughMoney;
+    EnoughMoney; 
+    Refunding; 
+}
+
 type LoginResult {
     constructor Ok;
     constructor BadPassword;
@@ -80,3 +92,29 @@ func readSecret(Store(t, LoggedIn st)) of () {
 }
 
 Store(valuet, LoggedIn) : Store(t, LoggedIn) ---> Store(valuet, LoggedOut) : Store(t, LoggedOut)
+
+type Matrix<Ty t>(Nat x, Nat y) { 
+    constructor MkMatrix(Vect x (Vect y t) v) of Matrix(x, y); 
+}
+
+func matMul(Matrix(x, y) a, Matrix(y, z) b) returns Matrix(x, z) {
+    
+}
+
+interface FSM a' b {
+    resource : a
+    resourceConc : a'
+    state : b
+    idxm : ty -> a -> b -> (ty -> b) -> ty
+    action : [(idxm ty a b (ty -> b), (a' -> IO (ty, a')))]
+    init : [(c -> a')]
+...
+}:
+
+
+record FSM(Ty ta, Ty tb) {
+    ta resourceType; 
+    tb stateType;
+    resourceType this; 
+    List(Func(() => Ty t), (stateType stIn, Func(t res => stateType))) actions; 
+}
