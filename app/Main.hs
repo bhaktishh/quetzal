@@ -2,18 +2,16 @@
 
 module Main where
 
-import Data.List (partition)
+import Data.List (partition, uncons)
 import qualified Data.Map as M
 import Data.Maybe
 import ITypes
 import PToI
 import PTypes
 import Parse
+import System.Environment (getArgs)
 import Text.Megaparsec (errorBundlePretty, parse, parseTest, runParser)
-import System.Environment (getArgs)
 import Unparse
-import Data.List (uncons)
-import System.Environment (getArgs)
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
 -- is there a way i can add a list of variables and types to carry around? or should that be a second pass
@@ -28,10 +26,10 @@ import System.Environment (getArgs)
 
 main :: IO ()
 main = do
-    args <- getArgs
-    case uncons args of
-        Nothing -> error "Usage: quetzal-exe <.qt file> <.idr file>"
-        Just (inpf, outpf) -> processFile inpf outpf
+  args <- getArgs
+  case uncons args of
+    Just (inpf, [outpf]) -> processFile inpf outpf
+    _ -> error "Usage: quetzal-exe <.qt file> <.idr file>"
 
 -- -- parsing utils
 parseFromFile p file = runParser p file <$> readFile file
