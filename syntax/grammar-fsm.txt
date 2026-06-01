@@ -18,7 +18,7 @@
 
 <func> := [ <directive> ] [ "[" <eff> "]" ] "func" <l-ident> "(" [ <type> <l-ident> { "," <type> <l-ident> } ] ")" [ "returns" <type> ] "{" <stmt> "}" 
 
-<type> := "Nat" | "Bool" | "String" | "Char" | "()" | "Ty" 
+<type> := "Nat" | "Bool" | "String" | "Char" | "Unit" | "Ty" 
         | "Func" "(" TODO "=>" <type> ")"
         | <u-ident> [ "<" <terms> ">" ] [ "(" <terms> ")" ] 
         | "List" <type> 

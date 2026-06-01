@@ -1,16 +1,12 @@
-func testLoop (Nat n) returns Nat {
-    Nat x = 11;
-    x = 12; 
-    if (x < 10) {
-        while (n < 10) {
-            x = x + 1;
-            n = n + 4;
-        }
-        n = n + 1;
-        return n;
-    }
-    else {
-        n = n + 2; 
-        return n + 4;
-    }
+type Vect(Nat n, Ty t) {
+    constructor Nil of Vect(0, t);
+    constructor Cons(t x, Vect(n, t) xs) of Vect(n + 1, t);
+}
+
+type Matrix(Nat m, Nat n) {
+    constructor MkMatrix(Vect(m, Vect(n, Nat)) vs);
+}
+
+func index(Matrix(m, n) a, Fin(m) i, Fin(n) j) returns Nat {
+                              
 }

@@ -68,3 +68,126 @@ interface FSM<Ty resTy, Ty stTy>  {
     List(Func(() => t), (stTy , Func (t r => stTy))) actions;
     List(Func( _ => resTy)) inits;
 }
+
+
+
+-- single line comment
+
+{-- this is a
+    multiline  
+    comment --} 
+
+type ElevatorState() {
+    constructor Open() of ElevatorState();
+    constructor Closed() of ElevatorState();
+    constructor Stopped() of ElevatorState();
+}
+
+type Elevator(ElevatorState st, String s) {
+    constructor MkElevator() of Elevator(st, s);
+}
+
+func main() of () {
+    Elevator e = MkElevator(s)
+}
+
+
+func open(Elevator(Open, s) e) of Elevator(Closed, s) {
+    return
+}
+
+type SoManyArgs(Ty t) {
+    constructor C1(t a, t b, t c, t d) of SoManyArgs(t);
+    constructor C2(t x, t y) of SoManyArgs(t);
+}
+
+type DoorState() {
+    constructor Open() of DoorState(); 
+    constructor Closed() of DoorState(); 
+}
+
+type Door(DoorState ds, Nat i) {
+    constructor MkDoor(DoorState ds, Nat i) of Door(ds, i);
+}
+
+func openDoor(Door(Closed, i) d) of Door(Open, i) {
+    return MkDoor(Open, i);
+}
+
+func closeDoor(Door(Open, i) d) of Door(Closed, i) {
+    return MkDoor(Closed, i);
+}
+
+func dodoor<DoorState ds>(Door(ds, i) d) of Door(ds2, i) {
+    eif(ds == Open) {
+        return closeDoor(d);
+    } else {
+        return openDoor(d);
+    }
+}
+
+
+type Access() {
+    constructor LoggedOut;
+    constructor LoggedIn;
+}
+
+enum PaymentStatus {
+    NotEnoughMoney;
+    EnoughMoney; 
+    Refunding; 
+}
+
+type LoginResult {
+    constructor Ok;
+    constructor BadPassword;
+}
+
+type Store (Ty t, Access ac) {
+    constructor MkStore(Ty t, Access ac) of Store(t, ac);
+}
+
+record Store (Ty t, Access x) {
+    t ret; 
+    Access ac;
+}
+
+func login (Store(t, LoggedOut) st) of () {
+    eif(validateLogin(st.t)) {
+        st.ac = LoggedIn;
+    } else {
+        st.ac = LoggedOut;
+    }
+}
+
+func readSecret(Store(t, LoggedIn st)) of () {
+
+}
+
+Store(valuet, LoggedIn) : Store(t, LoggedIn) ---> Store(valuet, LoggedOut) : Store(t, LoggedOut)
+
+type Matrix<Ty t>(Nat x, Nat y) { 
+    constructor MkMatrix(Vect x (Vect y t) v) of Matrix(x, y); 
+}
+
+func matMul(Matrix(x, y) a, Matrix(y, z) b) returns Matrix(x, z) {
+    
+}
+
+interface FSM a' b {
+    resource : a
+    resourceConc : a'
+    state : b
+    idxm : ty -> a -> b -> (ty -> b) -> ty
+    action : [(idxm ty a b (ty -> b), (a' -> IO (ty, a')))]
+    init : [(c -> a')]
+...
+}:
+
+
+record FSM(Ty ta, Ty tb) {
+    ta resourceType; 
+    tb stateType;
+    resourceType this; 
+    List(Func(() => Ty t), (stateType stIn, Func(t res => stateType))) actions; 
+}

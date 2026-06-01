@@ -18,7 +18,7 @@ data PTy
   | PTyUnit
   | PTyTy
   | PTyFunc
-      { tyFuncArgs :: List (PTy, String),
+      { tyFuncArgs :: List (PTy, String), --todo 
         tyFuncRetTy :: PTy
       }
   | PTyCustom

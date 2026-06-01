@@ -347,7 +347,7 @@ pPTyTy :: Parser PTy
 pPTyTy = string "Ty" >> pure PTyTy
 
 pPTyUnit :: Parser PTy
-pPTyUnit = string "()" >> pure PTyUnit
+pPTyUnit = string "Unit" >> pure PTyUnit
 
 pAssign :: Parser Stmt
 pAssign = do
@@ -650,6 +650,7 @@ pPTy =
     <|> try pPTyPTm
     <|> try pPTyList
     <|> try pTyHole
+    <|> (PTyPTm <$> try pPTmVar)
 
 pPTm1 :: Parser PTm
 pPTm1 =

@@ -38,7 +38,7 @@ func add5(Nat x) returns Nat {
     return x; 
 }
 
-func test<>() returns Void {}
+func test<>() returns Unit {}
 
 func append<Nat n, Nat m, Ty t> (Vect(t, n) v1, Vect(t, m) v2) returns Vect(t, n+m) {
     switch (v1, v2) {
