@@ -9,9 +9,11 @@ import ITypes
 import PToI
 import PTypes
 import Parse
+import Text.Megaparsec (errorBundlePretty, parse, parseTest, runParser)
 import System.Environment (getArgs)
-import Text.Megaparsec (parse, parseTest, runParser)
 import Unparse
+import Data.List (uncons)
+import System.Environment (getArgs)
 
 -- TODO: change many, some, satisfy to takeWhileP and takeWhile1P for efficiency
 -- is there a way i can add a list of variables and types to carry around? or should that be a second pass
@@ -26,8 +28,10 @@ import Unparse
 
 main :: IO ()
 main = do
-  [inpf, outpf] <- getArgs
-  processFile inpf outpf
+    args <- getArgs
+    case uncons args of
+        Nothing -> error "Usage: quetzal-exe <.qt file> <.idr file>"
+        Just (inpf, outpf) -> processFile inpf outpf
 
 -- -- parsing utils
 parseFromFile p file = runParser p file <$> readFile file
@@ -36,7 +40,7 @@ processFile :: String -> String -> IO ()
 processFile inpf outpf = do
   x <- readFile inpf
   case parse pProg "" x of
-    Left _ -> error "wtf"
+    Left err -> putStr . errorBundlePretty $ err
     Right prg' -> do
       let kvs = foldr mkFSMs M.empty (getFuncs prg')
           prg = prg' ++ (PFSM <$> M.elems kvs)
