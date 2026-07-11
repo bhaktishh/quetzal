@@ -199,6 +199,7 @@ unblock x = [x]
 -- args      og func  ctx map             body         where        (body, where)
 trListStmt :: Func -> M.Map String ITy -> List Stmt -> List ITm -> (ITm, List ITm)
 trListStmt _ _ [StReturn t] w = (trTm t, w)
+trListStmt _ _ (StBreak : xs) w = undefined
 trListStmt _ _ [] w = (ITmUnit, w)
 trListStmt _ _ (StBlock _ : _) _ = error "no TL block inside block allowed"
 trListStmt f ctx (StDeclAssign mty lhs rhs : xs) w =

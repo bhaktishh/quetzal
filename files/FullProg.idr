@@ -138,3 +138,6 @@ DecEq Dir where
 
 data Expr : (d : Dir) -> Type where 
 	Lam : (x : String) -> (e : Expr d) -> E
+
+
+	

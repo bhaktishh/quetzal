@@ -201,3 +201,15 @@ type Expr (Dir d) {
     constructor Val (Int i) of Expr(d); 
     constructor Proc (String x) of Expr(Read); 
 }
+
+func loopBreak(Nat x, Nat y, Nat n) returns Nat {
+    Nat z = x + y; 
+    while (z < n) {
+        if(y > x) {
+            break;
+        } else {
+            z = z + x; 
+        }
+    }
+    return z;
+}

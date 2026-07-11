@@ -370,6 +370,11 @@ pSkip = do
   _ <- pSpaces $ string ";;"
   pure StSkip
 
+pBreak :: Parser Stmt 
+pBreak = do 
+  _ <- pSpaces $ string "break"
+  pure StBreak
+
 pWhile :: Parser Stmt
 pWhile = do
   _ <- pSpaces $ string "while"
@@ -416,6 +421,7 @@ pStmt = StBlock <$> some pStmt0
 pStmt0 :: Parser Stmt
 pStmt0 =
   try pSkip
+    <|> try pBreak
     <|> try pAssign
     <|> try pDeclAssign
     <|> try pWhile

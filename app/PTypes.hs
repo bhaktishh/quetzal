@@ -91,9 +91,10 @@ data Case = Case
   }
   deriving (Show, Eq, Ord)
 
+-- todo add break 
 data Stmt
-  = StDeclAssign (Maybe PTy) String PTm
-  | StAssign String PTm
+  = StDeclAssign (Maybe PTy) String PTm -- todo stmt
+  | StAssign String PTm -- todo stmt
   | StWhile
       { condition :: PTm,
         body :: Stmt
@@ -108,6 +109,7 @@ data Stmt
   | StBlock (List Stmt)
   | StSwitch Switch
   | StSkip
+  | StBreak
   | StDot PTm PTm (List PTm)
   deriving (Show, Eq, Ord)
 

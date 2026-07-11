@@ -53,3 +53,11 @@ func mkStore(String secret, String pub) returns Store {
         }
     }
 }
+
+func test() {
+    String s = "hi";
+    String y = "bye";
+    IO.print(s);
+    String t = IO.getLine();
+    IO.print(t);
+}
