@@ -95,6 +95,7 @@ data Case = Case
 data Stmt
   = StDeclAssign (Maybe PTy) String PTm -- todo stmt
   | StAssign String PTm -- todo stmt
+  | StDeclBind (Maybe PTy) String Stmt
   | StWhile
       { condition :: PTm,
         body :: Stmt

@@ -365,6 +365,15 @@ pDeclAssign = do
   _ <- pSpaces $ char ';'
   pure $ StDeclAssign ty var rhs
 
+pDeclBind :: Parser Stmt
+pDeclBind = do
+  (ty, var) <- try ((,) <$> optional (pSpaces pPTy) <*> pSpaces pLowerStr) <|> (,) Nothing <$> pSpaces pLowerStr
+  _ <- pSpaces $ string ":="
+  rhs <- pSpaces pStmt 
+  _ <- pSpaces $ char ';'
+  pure $ StDeclBind ty var rhs
+
+
 pSkip :: Parser Stmt
 pSkip = do
   _ <- pSpaces $ string ";;"

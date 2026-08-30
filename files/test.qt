@@ -201,12 +201,3 @@ type Expr (Dir d) {
     constructor Val (Int i) of Expr(d); 
     constructor Proc (String x) of Expr(Read); 
 }
-
--- matrix 
--- scripting 
--- hash tables 
--- fsms 
--- memory management; reuse of existing memory -- reusing gc values 
--- device drivers 
--- restful apis 
--- frp 

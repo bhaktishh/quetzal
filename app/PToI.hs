@@ -565,7 +565,9 @@ nubAnnParam m (x@(AnnParam (ty, v) vis) : xs) lnew = case M.lookup v m of
   Just _ -> nubAnnParam m xs lnew
 
 getIAnnParamVar :: IAnnParam -> String
-getIAnnParamVar (IAnnParam (str, _) _) = str
+getIAnnParamVar (IAnnParam (str, _) True) = str
+getIAnnParamVar (IAnnParam (str, _) False) = "{" ++ str ++ "}" 
+
 
 getIAnnParamTy :: IAnnParam -> ITy
 getIAnnParamTy (IAnnParam (_, ty) _) = ty

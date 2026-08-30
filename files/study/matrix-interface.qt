@@ -1,0 +1,49 @@
+type Matrix(Nat m, Nat n);
+
+func zeros(Nat m, Nat n) returns Matrix(m, n);
+
+func identity(Nat m) returns Matrix(m, m);
+
+func init<Nat m, Nat n>(Vect(m, Vect(n, Nat) v)) returns Matrix(m, n); 
+
+func update<Nat m, Nat n>(Matrix(m, n) a, Fin(m) i, Fin(n) j, Nat x) returns Matrix(m, n); 
+
+func index<Nat m, Nat n>(Matrix(m, n) a, Fin(m) i, Fin(n) j) returns Nat; 
+
+func transpose<Nat m, Nat n>(Matrix(m, n) x) returns Matrix(n, m) {
+    Matrix(n, m) tx = zeros(n, m); 
+    for (Fin(n) j = 0; j < n; j++) {
+        for(Fin(m) i = 0; i < m; i++) {
+            tx.update(j, i, index(x, i, j));
+        }
+    }
+    return tx;
+}
+
+func transpose<Nat m, Nat n>(Matrix(m, n) x) returns Matrix(n, m) {
+    Matrix(n, m) tx = zeros(n, m);
+    Fin(n) j = 0;
+    Fin(m) i = 0;
+    ewhile ((finToNat(j)) < n) {
+        ewhile ((finToNat(i)) < m) {
+            tx.update(j, i, index(x, i, i));
+            i = i + 1;
+        }
+        j = j + 1;
+    }
+    return tx;
+}
+
+func mul<Nat m, Nat n>(Matrix(m, n) a, Matrix(n, o) b) returns Matrix(m, o);
+
+func add<Nat m, Nat n>(Matrix(m, n) a, Matrix(m, n) b) returns Matrix(m, n) {
+    Matrix(m, n) res = a; 
+    Fin(m) i = 0; 
+    Fin(n) j = 0;
+    ewhile(i < m) {
+        ewhile(j < n) {
+            res[i][j] += b[i][j];
+        }
+    }
+    return res; 
+}

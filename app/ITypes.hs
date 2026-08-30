@@ -4,23 +4,23 @@ import GHC.TypeLits
 import PTypes
 
 data ITy
-  = ITyNat
-  | ITyBool
-  | ITyUnit
-  | ITyTy
-  | ITyFunc (List (Maybe String, ITy))
-  | ITyVar String
-  | ITyApp ITy (List ITm)
-  | ITyList ITy
-  | ITyPair ITy ITy
+  = ITyNat --
+  | ITyBool --
+  | ITyUnit --
+  | ITyTy --
+  | ITyFunc (List (Maybe String, ITy)) -- does NOT need to be in 
+  | ITyVar String --
+  | ITyApp ITy (List ITm) -- NOT A TYPE ; should just wrap ty in tmty
+  | ITyList ITy --
+  | ITyPair ITy ITy --
   | ITyIO ITy
-  | ITyTm ITm
-  | ITyHole
+  | ITyTm ITm -- NOPE
+  | ITyHole --
   deriving (Show, Eq)
 
 data ITm
-  = ITmNat Nat
-  | ITmWildCard
+  = ITmNat Nat --
+  | ITmWildCard --
   | ITmPlus ITm ITm
   | ITmString String
   | ITmMinus ITm ITm
@@ -31,19 +31,18 @@ data ITm
   | ITmBLT ITm ITm
   | ITmBAnd ITm ITm
   | ITmBOr ITm ITm
-  | ITmBool Bool
-  | ITmPair ITm ITm
-  | ITmUnit
+  | ITmBool Bool --
+  | ITmPair ITm ITm --
+  | ITmUnit --
   | ITmNot ITm
-  | ITmList ITy (List ITm)
-  | ITmTy ITy
+  | ITmList ITy (List ITm) --
+  | ITmTy ITy -- NO NEED 
   | ITmVar String
   | ITmCon String (List ITm)
   | ITmFunc IFunc -- where clause
-  | ITmFuncCall ITm (List ITm)
+  | ITmFuncCall ITm (List ITm) -- changed to APP 
   | ITmIf ITm ITm ITm
   | ITmMatch (List ITm) (List (List ITm, ITm))
-  | ITmMatchImpossible (List ITm) (List ITm)
   | ITmLet String (Maybe ITy) ITm ITm
   | ITmLam (List ITm) ITm
   | ITmDo (List ITmDo)
@@ -60,8 +59,6 @@ data IConstructor = IConstructor
 
 data IAnnParam = IAnnParam (String, ITy) Bool -- explicit = true or false. default true
   deriving (Show, Eq)
-
-data IParam = IParam ITy Bool
 
 data IRecDecl = IRecDecl
   { iRecDeclName :: String,
@@ -97,7 +94,7 @@ data IFunc = IFunc
 
 data IImplementation = Impl
   { iImplicits :: List IAnnParam,
-    iConstraints :: List ITm,
+    iConstraints :: List ITm, -- autoimplicit 
     iSubject :: ITm,
     iBody :: IImplBody
   }
@@ -115,13 +112,6 @@ data IImplCase = IImplCase
 
 data IImplCaseBody = Tm ITm | Nest (List IImplCase) deriving (Show, Eq)
 
-data IFSM = IFSM
-  { idxm :: ITyDecl, -- actions
-    conc :: ITy, -- concrete type associated so it can be passed around
-    run :: IFunc -- monadic run function for constructors
-  }
-  deriving (Show, Eq)
-
 data ITmDo
   = ITmDoLet String (Maybe ITy) ITm
   | ITmDoBind (List ITm) ITm -- (a,b..) <- tm
@@ -130,3 +120,11 @@ data ITmDo
   | ITmDoIf ITm ITm ITm
   | ITmDoTm ITm -- arbitrary do terms
   deriving (Show, Eq)
+
+-- data IFSM = IFSM
+--   { idxm :: ITyDecl, -- actions
+--     conc :: ITy, -- concrete type associated so it can be passed around
+--     run :: IFunc -- monadic run function for constructors
+--   }
+--   deriving (Show, Eq)
+

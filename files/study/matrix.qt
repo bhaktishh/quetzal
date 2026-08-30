@@ -1,0 +1,26 @@
+type Fin(Nat n) {
+    constructor FZ<Nat n> of Fin(n + 1);
+    constructor FS<Nat n>(Fin(n) k) of Fin(n + 1); 
+}
+
+type Vect(Nat n, Ty t) {
+    constructor Nil of Vect(0, t);
+    constructor Cons(t head, Vect(n, t) tail) of Vect(1+n, t);
+}
+
+func vecIndex(Fin(n) i, Vect(n, t) v) of t { ... }
+
+def Matrix(Nat m, Nat n) {
+
+}
+
+func matIndex(Matrix(m, n) mtrx, Fin(n) i, Fin(m) j) returns Nat { ... }
+
+func matZeros(Nat m, Nat n)
+
+func matUpdate(Matrix(m, n) mtrx, Fin(n) i, Fin(m) j, Nat a) returns Nat { ... }
+
+func matMul(Matrix(m, n) a, Matrix(n, o) b) of Matrix(m, o) {
+    
+}
+

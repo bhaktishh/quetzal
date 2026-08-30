@@ -286,3 +286,34 @@ errors:
     - NO
 
 - decEq to PM
+
+TODOS 
+add type synonyms 
+type with 1 constructor sugar 
+syntax for DEFINITIONS rather than just types and functions ...
+EXAMPLES 
+-- matrix 
+  -- if it's a function Fin(m) -> Fin(n) -> Nat that's way too functional 
+  -- but if it's just a vector of vectors that's not great either ??
+  -- dont give the repr
+
+-- scripting
+-- hash tables
+-- fsms 
+-- memory management; reuse of existing memory -- reusing gc values 
+-- device drivers 
+-- restful apis 
+-- frp 
+
+
+-- for loop : list vs ord ?
+-- remove names from type arguments? 
+  -- or at least _ names when not needed ... or the opportunity to write just the type; for eta contracted functions???
+
+-- initialisation vs just declaration...
+
+
+for loop in idris
+
+-- array / vector interface 
+

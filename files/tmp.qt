@@ -1,12 +1,13 @@
-type Vect(Nat n, Ty t) {
-    constructor Nil of Vect(0, t);
-    constructor Cons(t x, Vect(n, t) xs) of Vect(n + 1, t);
-}
-
-type Matrix(Nat m, Nat n) {
-    constructor MkMatrix(Vect(m, Vect(n, Nat)) vs);
-}
-
-func index(Matrix(m, n) a, Fin(m) i, Fin(n) j) returns Nat {
-                              
+func transpose<Nat m, Nat n>(Matrix(m, n) x) returns Matrix(n, m) {
+    Matrix(n, m) tx = zeros(n, m);
+    Nat i = 0; 
+    Nat j = 0;
+    ewhile (i < n) {
+        ewhile (j < m) {
+            tx.update(natToFinLT(j), natToFinLT(i), index(x, natToFinLT(i), natToFinLT(j)));
+            i = i + 1;
+        }
+        j = j + 1;
+    }
+    return tx;
 }

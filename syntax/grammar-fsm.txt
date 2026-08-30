@@ -48,7 +48,7 @@
         | ( <term> | <eff> ) "." <term> "(" { <term> } ")" ";"
         | "switch" "(" <terms> ")" "{" { <case> } [ <default> ] "}" 
         | { <stmt> }
-
+        
 <case> := "case" "(" <terms> ")" "{" <stmt> "}"
 <default> := "default" "{" <stmt> "}"
 

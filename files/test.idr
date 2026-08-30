@@ -173,7 +173,7 @@ test =
 	()
 
 append : {n : Nat} -> {m : Nat} -> {t : Type} -> (v1 : Vect t n) -> (v2 : Vect t m) -> Vect t (n + m)
-append n m t v1 v2 = 
+append {n} {m} {t} v1 v2 = 
 	case (v1,v2) of
 		(Nil,v2) => v2
 		(Cons x xs,v2) => let v3 = append xs v2 in
@@ -203,7 +203,7 @@ where
 			No noprf => ret
 
 replicate : {t : Type} -> (x : t) -> (n : Nat) -> Vect t n
-replicate t x n = 
+replicate {t} x n = 
 	case n of
 		0 => Nil
 		S n => Cons x (replicate x n)

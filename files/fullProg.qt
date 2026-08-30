@@ -1,7 +1,11 @@
 type Vect(Nat n, Ty t) {
-    constructor Nil() of Vect(0, t);
-    constructor Cons(t head, Vect(n, t) tail) of Vect(1+n, t);
+    + Nil of Vect(0, t);
+    + Cons(t head, Vect(n, t) tail) of Vect(1+n, t);
+    
 }
+
+
+type Matrix(Nat m, Nat n) = Vect(m, (Vect(n, Nat)));
 
 type Test(Ty a, Ty z, Func(Ty z, x a => Ty) p) {
     constructor MkTest(a x, Ty z, p(z, x) pf) of Test(a, z, p);
@@ -90,6 +94,11 @@ func replicate<Ty t>(t x, Nat n) returns Vect(t, n) {
         case (S(n)) {return Cons (x, replicate(x,n));}
     }
 }
+
+func forTest() {
+    for (Nat i = 0, )
+}
+
 
 func testLoop (Nat n) returns Nat {
     Nat x = 11;

@@ -63,3 +63,11 @@ mkProgEls (PFunc f : xs) (is, ds, fs, fds) = case funcDirective f of
 
 writeIdris :: IProg -> String -> IO ()
 writeIdris p fpath = writeFile fpath (unparse p)
+
+tst = IFunc {
+  iFuncName = "test2", 
+  iFuncArgs = [], 
+  iFuncBody = [(ITmFuncCall (ITmVar "test2") [],ITmLet "x" (Just ITyNat) (ITmNat 0) (ITmLet "y" (Just ITyNat) (ITmNat 0) (ITmFuncCall (ITmVar "test2_rec0") [ITmVar "x",ITmVar "y"])))], 
+  iFuncRetTy = ITyUnit, 
+  iWhere = [ITmFunc (IFunc {iFuncName = "test2_rec0", iFuncArgs = [IAnnParam ("x",ITyNat) True,IAnnParam ("y",ITyNat) True], iFuncBody = [(ITmFuncCall (ITmVar "test2_rec0") [ITmVar "x",ITmVar "y"],ITmMatch [ITmFuncCall (ITmVar "isLT") [ITmVar "x",ITmNat 10]] [([ITmCon "Yes" [ITmVar "Refl"]],ITmFuncCall (ITmVar "test2_rec0") [ITmVar "x",ITmVar "y"]),([ITmCon "No" [ITmVar "noprf"]],ITmUnit)])], iFuncRetTy = ITyUnit, iWhere = []}),
+  ITmFunc (IFunc {iFuncName = "test2_rec0", iFuncArgs = [IAnnParam ("x",ITyNat) True,IAnnParam ("y",ITyNat) True], iFuncBody = [(ITmFuncCall (ITmVar "test2_rec0") [ITmVar "x",ITmVar "y"],ITmMatch [ITmFuncCall (ITmVar "isLT") [ITmVar "y",ITmNat 10]] [([ITmCon "Yes" [ITmVar "Refl"]],ITmLet "y" (Just ITyNat) (ITmPlus (ITmVar "y") (ITmNat 1)) (ITmFuncCall (ITmVar "test2_rec0") [ITmVar "x",ITmVar "y"])),([ITmCon "No" [ITmVar "noprf"]],ITmLet "x" (Just ITyNat) (ITmPlus (ITmVar "x") (ITmNat 1)) (ITmFuncCall (ITmVar "test2_rec0") [ITmVar "x",ITmVar "y"]))])], iFuncRetTy = ITyUnit, iWhere = []})]}
