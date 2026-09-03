@@ -12,8 +12,8 @@ Quetzal is syntactically imperative, semantically* dependently-typed.
 
 In the toplevel directory, to setup the project, run `stack build`. To run the transformations on a file `files/a.qt` and output the generated code to a file `files/b.idr`, run 
 
-`stack exec quetzal-exe -- "files/a.qt" "files/b.qt"`
-You can also run `processFile "files/a.qt" "files/b.qt"` within a ghci shell. 
+`stack exec quetzal-exe -- "files/a.qt" "files/b.idr"`
+You can also run `processFile "files/a.qt" "files/b.idr"` within a ghci shell. 
 
 You can also test individual parsers `p` by running `parseFromFile p files/file.qt`.
 
