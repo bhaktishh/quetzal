@@ -1,5 +1,7 @@
 # Quetzal
 
+**This repository is currently under (re)construction, and probably will not build until this message is up. Sorry!**
+
 ![a yellow dragon](quetzal.png "Quetzal")
 <!-- 
 Quetzal is syntactically imperative, semantically* dependently-typed.
