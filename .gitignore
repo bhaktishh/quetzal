@@ -1,4 +1,8 @@
+.DS_Store
+.vscode/
 .stack-work/
 *~
 build/
 semantics/
+files/
+lsp-sim
