@@ -1,6 +1,6 @@
 # Quetzal
 
-**This repository is currently under (re)construction, and probably will not build until this message is up. Sorry!**
+**This repository is currently under (re)construction, and probably will not build while this message is up. Sorry!**
 
 ![a yellow dragon](quetzal.png "Quetzal")
 <!-- 
